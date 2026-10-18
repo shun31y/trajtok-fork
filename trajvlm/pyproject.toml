@@ -10,15 +10,15 @@ description = "TrajVLM: trajectory-token VLM built on Molmo2 (Apache-2.0)"
 authors = [
     { name = "Allen Institute for Artificial Intelligence" }
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 license = { file = "LICENSE" }
 dependencies = [
     "absl-py",
     "cached_property",
     "fiddle >= 0.2.5",
     "numpy",
-    "torch",
-    "torchvision",
+    "torch==2.9.1",
+    "torchvision==0.24.1",
     "omegaconf",
     "rich",
     "boto3",
@@ -26,7 +26,7 @@ dependencies = [
     "tokenizers",
     "packaging",
     "cached_path>=1.6.4",
-    "transformers<5.0",
+    "transformers>=4.57,<5.0",
     "datasets",
     "huggingface_hub",
     "sentencepiece",
@@ -41,12 +41,15 @@ dependencies = [
     # we largely use trochcodec now, but some older preprocessing scripts use other libraries
     "imageio",
     "imageio[pyav]",
-    "torchcodec>=0.0.7",
+    "torchcodec==0.9.0",
     "decord2",
     "av",
     "moviepy",
     "ffmpeg-python",
     "spacy",
+    "timm",
+    "natsort",
+    "trajtok-segmenter",
 ]
 
 [project.optional-dependencies]
@@ -87,7 +90,7 @@ serve = [
     "cloudflared-tunnel"
 ]
 all = [
-    "ai2-molmo2[dev,train,serve]",
+    "trajvlm[dev,train,serve]",
 ]
 
 [project.urls]
@@ -117,3 +120,15 @@ exclude = [
 
 [tool.setuptools.dynamic]
 version = { attr = "olmo.version.VERSION" }
+
+# Match the CUDA/PyTorch versions in Dockerfile. Explicit index prevents
+# accidentally resolving CPU or a different CUDA build on another host.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+trajtok-segmenter = { path = "../segmenter", editable = true }

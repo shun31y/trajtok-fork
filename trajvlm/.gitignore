@@ -8,7 +8,6 @@ build/
 # dev tools
 
 .envrc
-.python-version
 .idea
 .venv/
 .vscode/
@@ -54,5 +53,4 @@ site/
 /scratch/
 .claude/
 checkpoints/
-uv.lock
 notebooks

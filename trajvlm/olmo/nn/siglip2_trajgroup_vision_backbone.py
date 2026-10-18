@@ -60,30 +60,15 @@ from olmo.nn.image_vit import SiglipVisionTransformer, VitConfig
 from olmo.nn.vision_backbone import MolmoVisionBackboneConfig
 
 # ---------------------------------------------------------------------------
-# Import SimpleSegmenter + TrajPerceiver from entry/share_models.
-# We add the repo root to sys.path so the existing segmenter code (with all
-# its dependencies — perceiver, dinov3, etc.) can be imported without copying
-# ~1500 LOC into molmo2's namespace. The trade-off is a small import-path
-# coupling; we can port properly later if needed.
-#
-# CRITICAL: the original DINOResNetHierFeat in share_models.utils.resnet
-# eagerly calls `.to('cuda')` in __init__, which crashes when Molmo2
-# constructs the parent model on meta device (which it does for FSDP). We
-# already have a meta-safe copy at olmo.nn.trajvit_dinov3.DINOResNetHierFeat
-# — monkey-patch share_models.utils.resnet BEFORE importing the segmenter
-# so SimpleSegmenter picks up the meta-safe version.
+# Use the segmenter shipped in this repository. Patch before importing
+# SimpleSegmenter so construction on the FSDP meta device stays safe.
 # ---------------------------------------------------------------------------
-_REPO_ROOT = "/weka/prior-default/chenhaoz/home/open_videotok"
-_ENTRY_DIR = os.path.join(_REPO_ROOT, "entry")
-if _ENTRY_DIR not in sys.path:
-    sys.path.insert(0, _ENTRY_DIR)
+import trajtok_segmenter.model.backbones.dinov3_convnext as _seg_backbone
+from olmo.nn.trajvit_dinov3 import DINOResNetHierFeat as _MetaSafeDINOResNet
+_seg_backbone.DINOResNetHierFeat = _MetaSafeDINOResNet
 
-import share_models.utils.resnet as _shr_resnet  # noqa: E402
-from olmo.nn.trajvit_dinov3 import DINOResNetHierFeat as _MetaSafeDINOResNet  # noqa: E402
-_shr_resnet.DINOResNetHierFeat = _MetaSafeDINOResNet
-
-from share_models.segmenter import SimpleSegmenter  # noqa: E402
-from share_models.utils.traj_perceiver import TrajPerceiver  # noqa: E402
+from trajtok_segmenter.model.segmenter import SimpleSegmenter
+from trajtok_segmenter.model.traj_perceiver import TrajPerceiver
 
 
 log = logging.getLogger(__name__)

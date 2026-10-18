@@ -44,6 +44,8 @@ pretrain + SFT trajvlm.
 
 ## Install
 
+For the fork's locked uv environment and NAS data setup, see [UV_SETUP.md](UV_SETUP.md).
+
 ```bash
 git clone https://github.com/hellomuffin/trajtok.git
 cd trajtok/trajvlm

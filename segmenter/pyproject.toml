@@ -21,7 +21,7 @@ dependencies = [
   "PyYAML",
   "easydict",
   "transformers>=4.40",
-  "decord",
+  "decord2",
   "av",
   "opencv-python",
   "scipy",
