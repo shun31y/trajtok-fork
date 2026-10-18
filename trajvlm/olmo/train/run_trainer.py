@@ -19,7 +19,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 from wandb.sdk.wandb_run import Run
 
 from olmo.exceptions import OLMoCliError, OLMoConfigurationError
-from olmo.io import file_exists, write_file
+from olmo.io import file_exists, write_file, read_file
 from olmo.train.checkpointer import Checkpointer, load_model_state_unsharded, is_unsharded_checkoint
 from olmo.torch_util import (
     barrier,
@@ -98,6 +98,13 @@ def run_trainer(cfg: TrainConfig) -> None:
     if start_from_unsharded:
         assert reset_opt and reset_train, "Unshared checkpoints do not support optim/train state loading"
 
+    allow_missing_lora = False
+    if start_from is not None and cfg.peft is not None:
+        from olmo.nn.peft import checkpoint_lora_warm_start
+        saved_config = OmegaConf.create(read_file(join(start_from, "config.yaml")))
+        allow_missing_lora = checkpoint_lora_warm_start(
+            cfg.peft, cfg.model.llm.lora, saved_config, resuming=is_resuming)
+
     # Fail fast if we would be overwriting another save directory
     if not cfg.dry_run and not is_resuming and not cfg.save_overwrite:
         save_path = join(cfg.save_folder, "config.yaml")
@@ -144,6 +151,12 @@ def run_trainer(cfg: TrainConfig) -> None:
         if freeze_wte:
             log.info(f"Freezing LLM: wte")
             olmo_model.transformer.wte.embedding.requires_grad = False
+
+    if cfg.peft is not None:
+        from olmo.nn.peft import apply_peft_policy
+        trainable = apply_peft_policy(olmo_model, cfg.peft)
+        log.info("PEFT %s: %d trainable tensors (%d parameters): %s",
+                 cfg.peft.mode, len(trainable), sum(trainable.values()), list(trainable))
 
     cp_enabled = cfg.parallelism.context_parallel_config.degree > 1
 
@@ -217,6 +230,10 @@ def run_trainer(cfg: TrainConfig) -> None:
             olmo_model.reset_with_pretrained_weights()
         fsdp_model = olmo_model
  
+    if start_from is not None and cfg.model.llm.lora is not None:
+        from olmo.nn.peft import reset_lora_parameters
+        reset_lora_parameters(olmo_model)
+
     torch.cuda.empty_cache()
 
     log.info(f"Total number of parameters: {olmo_model.num_params():,d}")
@@ -369,7 +386,7 @@ def run_trainer(cfg: TrainConfig) -> None:
             t0 = time.perf_counter()
             if start_from_unsharded:
                 log.info(f"Loading unshared model from {start_from}")
-                load_model_state_unsharded(start_from, fsdp_model)
+                load_model_state_unsharded(start_from, fsdp_model, allow_missing_lora=allow_missing_lora)
             else:
                 if reset_train and reset_opt:
                     log.info(f"Loading model from {start_from}")
@@ -382,6 +399,7 @@ def run_trainer(cfg: TrainConfig) -> None:
                     start_from,
                     load_optimizer_state=not reset_opt,
                     load_trainer_state=not reset_train,
+                    allow_missing_lora=allow_missing_lora,
                 )
             log.info(f"Checkpoint successfully loaded in {time.perf_counter()-t0:0.1f} seconds")
             barrier()

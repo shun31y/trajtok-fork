@@ -207,3 +207,61 @@ Run the CPU contract/compatibility tests without installing development extras:
 uv run --project trajvlm --locked --extra train python -m unittest discover \
   -s trajvlm/tests -p test_experiment_config.py -v
 ```
+
+## Stage-specific PEFT
+
+The standard YAML recipes now enable these trainable scopes:
+
+| Stage | Trainable | Frozen |
+| --- | --- | --- |
+| Stage1 (`peft.mode: connector_only`) | `vision_backbone.cross_attn` (TrajPerceiver), `image_projector` | LLM, ViT, segmenter, `query_proj`, embeddings and LM head |
+| Stage2 (`peft.mode: connector_lora`) | Same TrajPerceiver/Projector plus LLM LoRA A/B | All base LLM weights and every other module |
+
+`query_proj` is the separate 512→1152 bridge and is frozen. The Projector in
+this policy is `image_projector`, which maps trajectory tokens to LLM features.
+Learning rates, data, batch, duration, scheduler, FSDP and evaluation settings
+are unchanged. LoRA parameters use the existing LLM optimizer group/rate.
+
+Stage2 defaults are:
+
+```yaml
+peft:
+  mode: connector_lora
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.0
+    target_modules: [att_proj, attn_out]
+```
+
+The custom Molmo LLM uses fused Q/K/V in `att_proj`, so these are attention
+input/output projections. This is native LoRA for the repository's LLM, not a
+Hugging Face PEFT wrapper, and adds no dependency. Original Linear weight keys
+remain intact. Configurations using separate attention projections can explicitly
+choose `q_proj`, `k_proj`, `v_proj`, `attn_out`; unmatched targets fail during
+model construction. Adapter settings can be overridden with e.g.
+`--set peft.lora.rank=8 --set peft.lora.alpha=16` and appear in previews and
+saved model configuration.
+
+Stage1→Stage2 initializes new adapters with zero initial delta, while loading
+all Stage1 base/connector weights. Full-model checkpoints continue to include
+both base weights and adapters. Resuming Stage2 requires the same PEFT/LoRA
+configuration and restores adapter and optimizer state; missing base weights
+or missing adapters on resume fail. Both sharded and unsharded checkpoints are
+supported. Changing rank/targets/alpha/dropout while resuming is rejected.
+
+The PEFT defaults apply to the YAML recipes. Legacy CLI launchers retain their
+PEFT-unset behavior; use the YAML launcher for the staged policy. To explicitly
+recover the previous full-finetuning YAML behavior, use `--set peft=null`.
+
+The CPU tests check exact optimizer membership, frozen parameters, actual
+backward/update behavior, the real custom Qwen block's adapter construction,
+meta materialization and checkpoint transition/resume with Gloo:
+
+```bash
+uv run --project trajvlm --locked --extra train python -m unittest discover \
+  -s trajvlm/tests -p test_peft.py -v
+```
+
+The checkpoint tests require permission to create local loopback sockets.
+GPU/FSDP execution is still unverified on this host.

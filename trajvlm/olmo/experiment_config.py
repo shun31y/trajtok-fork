@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 
 from omegaconf import MISSING, OmegaConf
 from omegaconf.errors import MissingMandatoryValue
+from olmo.nn.peft import PeftConfig
 
 
 @dataclass
@@ -81,6 +82,7 @@ class Recipe:
     training: Training = field(default_factory=Training)
     evaluation: Evaluation = field(default_factory=Evaluation)
     tracking: Tracking = field(default_factory=Tracking)
+    peft: Optional[PeftConfig] = None
     checkpoint: Optional[str] = None
     trainer_overrides: Dict[str, Any] = field(default_factory=dict)
 
@@ -183,6 +185,11 @@ def validate_recipe(r):
     if urlparse(r.run.output_dir).scheme:
         raise ValueError('run.output_dir currently requires a local filesystem path')
     t = r.training
+    if r.peft is not None:
+        r.peft.validate()
+        expected = 'connector_only' if r.stage == 'pretrain' else 'connector_lora'
+        if r.peft.mode != expected:
+            raise ValueError(f'{r.stage} requires peft.mode={expected}')
     if (t.max_steps is None) == (t.epochs is None):
         raise ValueError('Specify exactly one of training.max_steps or training.epochs')
     positive = {'global_batch_size': t.global_batch_size, 'micro_batch_size': t.micro_batch_size,
@@ -250,6 +257,11 @@ def build_experiment(experiment):
     duration = t.max_steps if t.max_steps is not None else t.epochs * math.ceil(r.data.train_examples / t.global_batch_size)
 
     def configure(cfg):
+        cfg.peft = r.peft
+        if r.peft is not None:
+            cfg.ft_connector, cfg.ft_vit = True, False
+            cfg.ft_llm = r.peft.mode == 'connector_lora'
+            cfg.model.llm.lora = r.peft.lora if cfg.ft_llm else None
         cfg.run_name, cfg.save_folder, cfg.seed = r.run.name, r.run.output_dir, r.run.seed
         cfg.allow_resume, cfg.save_overwrite = r.run.resume, False
         cfg.max_duration = cfg.stop_at = duration

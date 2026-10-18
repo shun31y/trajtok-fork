@@ -28,3 +28,6 @@ evaluation:
   loss_tasks: []
 tracking:
   enabled: false
+
+peft:
+  mode: connector_only

@@ -28,7 +28,11 @@ STAGE2 = ROOT / 'configs/experiments/stage2_videoqa.yaml'
 
 
 def serial(cfg):
-    return json.loads(json.dumps(OmegaConf.to_container(OmegaConf.structured(cfg), resolve=True), default=str))
+    value = json.loads(json.dumps(OmegaConf.to_container(OmegaConf.structured(cfg), resolve=True), default=str))
+    # The new optional architecture field is absent from pre-PEFT snapshots.
+    if value.get('model', {}).get('llm', {}).get('lora') is None:
+        value.get('model', {}).get('llm', {}).pop('lora', None)
+    return value
 
 
 class Experiments(unittest.TestCase):
@@ -318,7 +322,10 @@ class Experiments(unittest.TestCase):
                                                  '--pretrained_segmenter_path=none'])
         legacy = pretrain.build_train_config(args)
         for key in ('model', 'optimizer', 'scheduler', 'global_train_batch_size', 'max_duration', 'stop_at'):
-            self.assertEqual(serial(cfg)[key], serial(legacy)[key], key)
+            actual = serial(cfg)[key]
+            if key == 'model':
+                actual['llm'].pop('lora', None)
+            self.assertEqual(actual, serial(legacy)[key], key)
         exp = self.experiment(2)
         cfg = build_experiment(exp)
         args = sft.make_parser().parse_args([str(FIXTURES / 'pretrain_checkpoint'), 'molmo2',
@@ -326,7 +333,10 @@ class Experiments(unittest.TestCase):
                                              '--device_batch_size=1', '--no_compile'])
         legacy = sft.build_train_config(args, ['--save_folder=/tmp/legacy-sft'], checkpoint_selector=lambda p:p)
         for key in ('model', 'optimizer', 'scheduler', 'max_duration', 'stop_at', 'global_train_batch_size'):
-            self.assertEqual(serial(cfg)[key], serial(legacy)[key], key)
+            actual = serial(cfg)[key]
+            if key == 'model':
+                actual['llm'].pop('lora', None)
+            self.assertEqual(actual, serial(legacy)[key], key)
 
     def test_registry_import_orders(self):
         for order in ('pretrain,sft', 'sft,pretrain'):

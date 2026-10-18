@@ -20,6 +20,7 @@ from omegaconf.errors import OmegaConfBaseException
 from torch.distributed import init_device_mesh, DeviceMesh
 from torch.distributed.fsdp import MixedPrecision, ShardingStrategy, MixedPrecisionPolicy
 
+from olmo.nn.peft import PeftConfig
 from olmo.config import BaseConfig, StrEnum, DType, TransformerDataParallelWrappingStrategy
 from olmo.nn.cp_load_balancer import CPLoadBalancerType
 from olmo.data.data_loader import DataLoaderConfig
@@ -543,6 +544,8 @@ class TrainConfig(BaseConfig):
     """
     If ``True``, don't actually train.
     """
+
+    peft: Optional[PeftConfig] = None
 
     ft_llm: bool = True
     """

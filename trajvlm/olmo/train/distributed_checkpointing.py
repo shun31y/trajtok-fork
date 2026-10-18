@@ -191,6 +191,7 @@ def load_model_and_optim_state(
     pre_download: bool = False,
     work_dir: Optional[PathOrStr] = None,
     thread_count: Optional[int] = None,
+    allow_missing_lora: bool = False,
 ):
     """
     Load model and optimizer state in-place from a checkpoint saved via :func:`save_model_and_optim_state()`.
@@ -274,7 +275,11 @@ def load_model_and_optim_state(
                     group["params"][idx] = original_key
                     break
 
+    from olmo.nn.peft import is_lora_key, check_missing_lora_keys
     model_key_list = list(state_dict['model'].keys())
+    if any(is_lora_key(key) for key in model_key_list):
+        missing = [key for key in model_key_list if f"model.{key}" not in metadata.state_dict_metadata]
+        check_missing_lora_keys(missing, allow_missing_lora=allow_missing_lora)
     skipped_modules = {}
     for model_key in model_key_list:
         if f"model.{model_key}" not in metadata.state_dict_metadata:
@@ -286,6 +291,12 @@ def load_model_and_optim_state(
         storage_reader=reader,
         process_group=process_group,
     )
+
+    # New LoRA parameters have been initialized after materialization. Keep
+    # those values only for the explicitly authorized Stage1 -> Stage2 load.
+    for key in list(skipped_modules):
+        if allow_missing_lora and is_lora_key(key):
+            state_dict['model'][key] = skipped_modules.pop(key)
 
     if len(skipped_modules) > 0:
         for key in ["vision_backbone.pad_embed"]:

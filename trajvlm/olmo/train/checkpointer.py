@@ -23,6 +23,7 @@ from omegaconf import OmegaConf
 from torch import nn, nn as nn
 from torch.distributed.checkpoint import state_dict as dist_cp_sd
 
+from olmo.nn.peft import check_missing_lora_keys, is_lora_key
 from olmo.config import BaseConfig
 from olmo.io import PathOrStr, dir_is_empty, normalize_path, is_url, clear_directory, upload, \
     list_directory, resource_path, write_file, file_exists
@@ -39,7 +40,7 @@ OPT_FILENAME = "optim.pt"
 
 
 @torch.no_grad()
-def load_model_state_unsharded(dir: PathOrStr, model: nn.Module):
+def load_model_state_unsharded(dir: PathOrStr, model: nn.Module, *, allow_missing_lora=False):
     """
     Load model state in-place for unsharded chechpoint saved in `dir`,
     works for sharded and unsharded models
@@ -49,11 +50,34 @@ def load_model_state_unsharded(dir: PathOrStr, model: nn.Module):
                                 map_location="cpu", weights_only=True)
     else:
         state_dict = {}
-    dist_cp_sd.set_model_state_dict(
+    if allow_missing_lora or any(is_lora_key(name) for name, _ in model.named_parameters()):
+        # Some PyTorch versions omit missing_keys from the return value when
+        # broadcast_from_rank0 + strict=False is used. Validate keys explicitly.
+        expected = set(dist_cp_sd.get_model_state_dict(model).keys())
+        error = [None]
+        if get_global_rank() == 0:
+            try:
+                check_missing_lora_keys(expected - state_dict.keys(), allow_missing_lora=allow_missing_lora)
+                unexpected = state_dict.keys() - expected
+                if unexpected:
+                    raise RuntimeError(f"Unexpected checkpoint keys: {sorted(unexpected)}")
+            except RuntimeError as exc:
+                error[0] = str(exc)
+        if torch.distributed.is_initialized():
+            torch.distributed.broadcast_object_list(error, src=0)
+        if error[0] is not None:
+            raise RuntimeError(error[0])
+
+    errors = dist_cp_sd.set_model_state_dict(
         model=model,
         model_state_dict=state_dict,
-        options=dist_cp_sd.StateDictOptions(full_state_dict=True, broadcast_from_rank0=True)
+        options=dist_cp_sd.StateDictOptions(full_state_dict=True, broadcast_from_rank0=True,
+                                         strict=not allow_missing_lora)
     )
+    if allow_missing_lora:
+        check_missing_lora_keys(errors.missing_keys, allow_missing_lora=True)
+        if errors.unexpected_keys:
+            raise RuntimeError(f"Unexpected checkpoint keys: {errors.unexpected_keys}")
 
 
 def save_unsharded(dir: PathOrStr, model: nn.Module, optim: Optimizer,
@@ -210,6 +234,7 @@ class Checkpointer:
         load_optimizer_state: Optional[bool] = None,
         load_trainer_state: Optional[bool] = None,
         key_mapping: Optional[Dict[str, str]] = None,
+        allow_missing_lora: bool = False,
     ) -> Optional[Dict[str, Any]]:
         """
         Load model, optim, and other training state from a local or remote checkpoint directory
@@ -240,6 +265,7 @@ class Checkpointer:
             optim if load_optimizer_state else None,
             process_group=None,
             key_mapping=key_mapping,
+            allow_missing_lora=allow_missing_lora,
             pre_download=is_url(dir) and self.pre_download,
             work_dir=self.work_dir,
             thread_count=self.load_thread_count,

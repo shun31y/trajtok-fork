@@ -27,3 +27,11 @@ evaluation:
   loss_tasks: []
 tracking:
   enabled: false
+
+peft:
+  mode: connector_lora
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.0
+    target_modules: [att_proj, attn_out]
