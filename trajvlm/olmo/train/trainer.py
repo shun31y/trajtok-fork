@@ -645,13 +645,14 @@ class Trainer:
         local_cache: Optional[PathOrStr] = None,
         load_optimizer_state: bool = True,
         load_trainer_state: bool = True,
-        allow_missing_keys: bool = False
+        allow_missing_keys: bool = False,
+        allow_missing_lora: bool = False,
     ):
         trainer_state = self.checkpointer.load(
             load_path, self.fsdp_model, self.optim,
             load_optimizer_state=load_optimizer_state,
             load_trainer_state=load_trainer_state,
-            # allow_missing_keys=allow_missing_keys
+            allow_missing_lora=allow_missing_lora,
         )
         if load_trainer_state:
             self.load_trainer_state_dict(trainer_state)

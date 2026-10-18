@@ -28,6 +28,7 @@ from torch.distributed.fsdp import fully_shard
 
 from olmo.config import BaseConfig, StrEnum
 from olmo.nn.cp_load_balancer import CPLoadBalancerType
+from olmo.nn.peft import LoRAConfig, install_lora, reset_lora_parameters, is_lora_key
 from olmo.nn.flash_attention_api import (
     dispatch_ring_flash_attn,
     dispatch_flash_attn
@@ -275,6 +276,8 @@ def init_normal(
 @dataclasses.dataclass
 class LlmConfig(BaseConfig):
     """Configuration for a multi-layer transformer"""
+
+    lora: Optional[LoRAConfig] = None
 
     d_model: int = 768
     """
@@ -727,6 +730,9 @@ class Llm(nn.Module):
                     device=device,
                 )
 
+        if config.lora is not None:
+            install_lora(self.blocks, config.lora)
+
     def reset_parameters(self) -> None:
         if self.config.additional_vocab_size:
             init_weights(
@@ -750,6 +756,7 @@ class Llm(nn.Module):
             init_weights(self.config, self.ff_out, type_of_module=ModuleType.final_out)
         for block in self.blocks:
             block.reset_parameters()
+        reset_lora_parameters(self)
 
     def reset_with_pretrained_weights(self) -> None:
         if self.config.init_path is None:
@@ -809,11 +816,13 @@ class Llm(nn.Module):
                 key_errors = self.load_state_dict(state_dict, strict=False)
 
             assert len(key_errors.unexpected_keys) == 0
-            assert set(key_errors.missing_keys) <= {"wte.new_embedding"}
+            assert all(key == "wte.new_embedding" or is_lora_key(key) for key in key_errors.missing_keys)
             log.info(f"Done in {time.perf_counter()-t0:0.1f} seconds")
 
             if self.config.additional_vocab_size is not None:
                 nn.init.normal_(self.wte.new_embedding, std=self.config.new_embedding_init_range)
+
+        reset_lora_parameters(self)
 
     def apply_fsdp2(self, **kwargs):
         for block in self.blocks:
