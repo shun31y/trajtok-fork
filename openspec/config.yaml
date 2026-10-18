@@ -1,0 +1,19 @@
+schema: spec-driven
+context: |
+  TrajTok fork: segmenter/, trajvitv2/, trajvlm/. Focus: TrajVLM experiment management.
+  Python 3.12.13, uv locked environment in trajvlm/, PyTorch 2.9.1+cu128,
+  OmegaConf 2.4.0, dataclass TrainConfig, torchrun/FSDP, optional W&B.
+  Stage1 entrypoint: trajvlm/launch_scripts/trajvlm_pretrain.py.
+  Stage2 entrypoint: trajvlm/launch_scripts/trajvlm_sft.py.
+  Data root is configured by MOLMO_DATA_DIR; local default is
+  /mnt/nas5/shun/VideoUnderstanding/trajtok (do not hard-code in shared recipes).
+  Data downloads are ongoing. Planning and config validation must not start
+  training, download data/models, or require a working GPU.
+  Use existing OmegaConf/dataclass infrastructure and preserve legacy launchers.
+  User-facing planning documents are Japanese; requirement keywords use SHALL/MUST.
+rules:
+  design:
+    - Ground decisions in inspected source and identify configuration precedence.
+    - Distinguish CPU-only configuration preview from Trainer dry_run.
+  tasks:
+    - Include meaningful config validation and compatibility tests without GPUs.
