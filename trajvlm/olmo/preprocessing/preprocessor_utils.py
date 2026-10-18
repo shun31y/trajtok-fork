@@ -49,7 +49,7 @@ class TokenizedVisionData:
 @dataclasses.dataclass
 class TensorSpec:
     """The expected shape and dtype of a tensor"""
-    shape: Tuple[int]
+    shape: Tuple[int, ...]
     dtype: np.dtype
 
     def __post_init__(self):
@@ -101,7 +101,7 @@ class TensorSpec:
 class VariablePaddingSpec:
     """Indicates a key can have a variable shape after collation"""
 
-    shape: Tuple[int]
+    shape: Tuple[int, ...]
     """Shape of padding tensor if key is not in batch and padding is required"""
 
     dtype: np.dtype

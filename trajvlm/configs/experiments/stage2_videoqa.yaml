@@ -1,0 +1,6 @@
+extends: [../base/sft.yaml]
+run:
+  name: stage2_videoqa
+  output_dir: ../../results/stage2_videoqa
+# Select an exact checkpoint directory containing config.yaml (not a run root).
+checkpoint: ../../results/stage1_pixmo_cap/step22347

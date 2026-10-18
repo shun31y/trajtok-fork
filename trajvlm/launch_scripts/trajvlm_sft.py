@@ -30,49 +30,10 @@ import typing as _typing  # noqa: F401
 # Molmo2PreprocessorConfig with TrajVit-typed fields. We then point
 # get_model_types('video_olmo') at our subclass so TrainConfig.load resolves
 # the pretrain ckpt's config.yaml to TrajVlmConfig.
-import dataclasses as _dc
-from olmo.models.molmo2.molmo2 import Molmo2Config
-from olmo.models.molmo2.molmo2_preprocessor import Molmo2PreprocessorConfig
-# Use the NEW SigLip2+segmenter-connector backbone (matches the trajvlm_pretrain_v2
-# checkpoint we're loading from). The old TrajVitVisionBackboneConfig
-# (DINOv3-as-backbone) was discarded in the v2 architecture pivot.
-from olmo.nn.siglip2_trajgroup_vision_backbone import (
-    SigLip2TrajGroupVisionBackboneConfig,
+from olmo.models.trajvlm_config import (
+    TrajVlmConfig, TrajVlmPreprocessorConfig, Molmo2Config,
+    SigLip2TrajGroupVisionBackboneConfig, TrajVitImageConfig, TrajVitVideoConfig,
 )
-from olmo.preprocessing.trajvit_preprocessor import TrajVitImageConfig, TrajVitVideoConfig
-from olmo.models import model_config as _model_config
-
-
-@_dc.dataclass
-class TrajVlmPreprocessorConfig(Molmo2PreprocessorConfig):
-    image: TrajVitImageConfig = _dc.field(default_factory=TrajVitImageConfig)
-    video: TrajVitVideoConfig = _dc.field(default_factory=TrajVitVideoConfig)
-
-
-@_dc.dataclass
-class TrajVlmConfig(Molmo2Config):
-    vision_backbone: SigLip2TrajGroupVisionBackboneConfig = _dc.field(
-        default_factory=SigLip2TrajGroupVisionBackboneConfig,
-    )
-    mm_preprocessor: TrajVlmPreprocessorConfig = _dc.field(default_factory=TrajVlmPreprocessorConfig)
-
-
-TrajVlmConfig._model_name = Molmo2Config._model_name  # "video_olmo"
-
-
-def _patched_get_model_types():
-    from olmo.models.molmo.molmo import MolmoConfig
-    from olmo.models.molmo_point.molmo_point import MolmoPointConfig
-    return {
-        MolmoConfig._model_name: MolmoConfig,
-        TrajVlmConfig._model_name: TrajVlmConfig,       # overrides Molmo2Config
-        MolmoPointConfig._model_name: MolmoPointConfig,
-        "token_indexing_video_molmo2": MolmoPointConfig,
-    }
-
-
-_model_config.get_model_types = _patched_get_model_types
-
 
 # Now the rest of the imports.
 import argparse  # noqa: E402
@@ -102,15 +63,11 @@ from olmo.train.trainer_config import (  # noqa: E402
 )
 from olmo.util import clean_opt, prepare_torchrun_environment, select_checkpoint  # noqa: E402
 
-# trainer_config also caches get_model_types lookups — re-bind there too.
-from olmo.train import trainer_config as _trainer_config  # noqa: E402
-_trainer_config.get_model_types = _patched_get_model_types
-
 # Reuse Molmo2 SFT mixtures verbatim — user explicitly chose "Molmo2 default SFT mix".
 from launch_scripts.sft import get_training_mixture  # noqa: E402
 
 
-def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int):
+def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int, config_loader=None):
     """Load the pretrain ckpt's config (TrajVlmConfig after our shim), then
     apply SFT-style fine-tuning settings (mirrors molmo2/sft.py's get_model)
     while swapping the image-only video preprocessor for the real
@@ -118,7 +75,7 @@ def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int):
     """
     # `MolmoConfig.load` dispatches via `_model_name` -> get_model_types(),
     # which (per our shim above) resolves "video_olmo" to TrajVlmConfig.
-    model_cfg = MolmoConfig.load(join(checkpoint, "config.yaml"), key="model")
+    model_cfg = (config_loader or MolmoConfig.load)(join(checkpoint, "config.yaml"), key="model")
     assert isinstance(model_cfg, TrajVlmConfig), (
         f"expected TrajVlmConfig, got {type(model_cfg).__name__}. "
         f"Did the get_model_types shim register correctly?"
@@ -222,8 +179,7 @@ def _start_memory_profiler(log_interval_sec: int = 30):
     t.start()
 
 
-def main():
-    prepare_torchrun_environment()
+def make_parser():
     # _start_memory_profiler(30)  # disabled — re-enable when investigating host-RAM OOMs
 
     parser = argparse.ArgumentParser(prog="Train trajvlm with multitask SFT")
@@ -243,7 +199,13 @@ def main():
     parser.add_argument("--no_compile", action="store_true",
                         help="Disable torch.compile. Trajvlm pretrain ran with --no_compile due to "
                              "the perceiver+DTensor interaction; mirror that for SFT until verified.")
-    args, other_args = parser.parse_known_args()
+    return parser
+
+
+def build_train_config(args, other_args=(), *, checkpoint_selector=select_checkpoint,
+                       model_loader=get_trajvlm_model, training_mixture=None,
+                       evaluation_tasks=None, configure=None):
+    """Build settings; callers can supply metadata-only checkpoint resolution."""
 
     if args.mixture == "debug":
         loss_eval_tasks = ["llava_video_oe_academic", "pixmo_ask_model_anything"]
@@ -268,11 +230,14 @@ def main():
             "vixmo_points_count:val",
         ]
 
-    training_mixture = get_training_mixture(args.mixture)
+    if evaluation_tasks is not None:
+        eval_tasks, loss_eval_tasks = evaluation_tasks
+    if training_mixture is None:
+        training_mixture = get_training_mixture(args.mixture)
     seq_len = args.seq_len
 
-    checkpoint = select_checkpoint(args.checkpoint)
-    model_cfg = get_trajvlm_model(
+    checkpoint = checkpoint_selector(args.checkpoint)
+    model_cfg = model_loader(
         checkpoint,
         num_frames=args.num_frames,
         frames_per_clip=args.frames_per_clip,
@@ -410,6 +375,9 @@ def main():
 
     cfg.parallelism.context_parallel_config.degree = args.cp_degree
 
+    if configure is not None:
+        configure(cfg)
+
     conf = OmegaConf.create(cfg)
     if other_args:
         conf.merge_with_dotlist([clean_opt(arg) for arg in other_args])
@@ -419,7 +387,13 @@ def main():
         conf.model.cp_enabled = True
         conf.compile = None
 
-    run_trainer(conf)
+    return conf
+
+
+def main():
+    args, other_args = make_parser().parse_known_args()
+    prepare_torchrun_environment()
+    run_trainer(build_train_config(args, other_args))
 
 
 if __name__ == "__main__":
