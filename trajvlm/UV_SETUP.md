@@ -18,8 +18,12 @@ and serving packages; it is not necessary for this setup.
 
 ## Data layout
 
-The default root is `/mnt/nas5/shun/VideoUnderstanding/trajtok`. On another
-machine, set `MOLMO_DATA_DIR` before sourcing `data_env.sh`.
+The main root for Stage2 video data and model assets is
+`/mnt/nas5/shun/VideoUnderstanding/trajtok` (`MOLMO_DATA_DIR`).
+PixMo data use `/mnt/ssd2/shun/VideoUnderstanding/trajtok` (`PIXMO_DATA_DIR`).
+On another machine, set these variables before sourcing `data_env.sh`.
+For PixMo rows below, "root" means `PIXMO_DATA_DIR`; the other data rows use
+`MOLMO_DATA_DIR`. HF caches and reports for each download use its stage's root.
 
 | Path under the root | Contents |
 | --- | --- |
@@ -322,3 +326,43 @@ uv run --project trajvlm --locked --extra train python -m unittest discover \
 ```
 
 Actual 7B-weight conversion and GPU training remain unverified.
+
+
+## PixMoCap on SSD, Stage2 on NAS
+
+`source scripts/data_env.sh` exports separate roots:
+
+```bash
+export MOLMO_DATA_DIR=/mnt/nas5/shun/VideoUnderstanding/trajtok
+export PIXMO_DATA_DIR=/mnt/ssd2/shun/VideoUnderstanding/trajtok
+```
+
+The PixMo downloader routes its images, prepared records, HF caches and reports
+to the SSD root. Stage2 continues to use the NAS root. For training, keep the
+main root pointing to the existing model assets and set `PIXMO_DATA_DIR` to the
+SSD; changing the base-model/VideoQA paths is unnecessary. All PixMo dataset
+classes respect the optional PixMo root; when it is unset, their legacy
+`MOLMO_DATA_DIR` layout remains supported. An explicit `PIXMO_IMAGE_DIR` can
+still override image loading, while the PixMo download wrapper deliberately
+sets that directory under the selected SSD root.
+
+```bash
+bash trajvlm/scripts/prepare_training_data.sh pixmo_cap --n-procs 16
+bash trajvlm/scripts/prepare_training_data.sh video_academic --n-procs 8
+```
+
+Do not launch a second PixMo download while the existing SSD job is running.
+For the initial migration, the NAS PixMo process and all child workers were
+stopped; the NAS cache is retained. A detached migration job copies valid
+images and the PixMo HF metadata to SSD, quarantines old failure-text cache
+records, then starts the SSD downloader. Its status and output are in:
+
+```text
+/mnt/ssd2/shun/VideoUnderstanding/trajtok/setup_reports/migration.json
+/mnt/ssd2/shun/VideoUnderstanding/trajtok/logs/pixmo_migration.log
+/mnt/ssd2/shun/VideoUnderstanding/trajtok/logs/pixmo_cap_download.log
+```
+
+The last log is created after migration completes. Prepared PixMo records are
+built with SSD image paths; retain this path or regenerate the records if the
+image root changes again. NAS data are not deleted by this migration.
