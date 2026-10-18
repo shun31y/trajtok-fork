@@ -55,6 +55,16 @@ pip install -e .
 Python ≥ 3.10. See `Dockerfile` for a reproducible CUDA env, or follow
 Molmo2's install notes (below) for additional video deps.
 
+## YAML experiments
+
+Use `configs/experiments/stage1_pixmo_cap.yaml` or `stage2_videoqa.yaml` with
+`launch_scripts/trajvlm_experiment.py --config FILE --print-config` to inspect
+an experiment without GPUs or downloaded weights. Stage2 inspection requires
+checkpoint configuration metadata. Recipes support `extends`, typed CLI
+`--set` overrides, explicit data/evaluation selection, and per-run provenance.
+See [UV_SETUP.md](UV_SETUP.md#yaml-experiment-management) for examples, training
+and resume commands. Existing shell/CLI launchers remain supported.
+
 ## Download external assets
 
 | Asset | License | How |

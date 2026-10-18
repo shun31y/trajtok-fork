@@ -1,0 +1,1293 @@
+{
+  "model": {
+    "model_name": "video_olmo",
+    "data_formatter": {
+      "prompt_templates": "uber_model_v2",
+      "message_format": "qwen3",
+      "system_prompt": "demo_or_style_v2",
+      "always_start_with_space": false,
+      "default_inference_len": 65,
+      "select_answer": "best",
+      "debug": false,
+      "image_last": false,
+      "format_message_list": null,
+      "p_one_message": 0.0,
+      "eval_system_prompt_mapping": null,
+      "p_choice_content_in_mc": 1.0,
+      "template_video_mc_questions": true,
+      "pointing_format": "html-v2",
+      "points_decimal_places": 1,
+      "use_seperate_non_pointing_qa_style": false,
+      "timestamp_mode": "50-percent-seconds",
+      "output_timestamp_mode": "seconds",
+      "seconds_decimal_places": 1,
+      "p_multi_point_all_image": 0.5,
+      "use_seperate_count_without_pointing_style": false,
+      "sample_random_initial_point": true
+    },
+    "llm": {
+      "d_model": 2560,
+      "n_heads": 32,
+      "n_kv_heads": 8,
+      "head_dim": 128,
+      "qkv_bias": false,
+      "clip_qkv": null,
+      "n_layers": 36,
+      "mlp_ratio": 4,
+      "mlp_hidden_size": 19456,
+      "activation_type": "swiglu",
+      "block_type": "sequential",
+      "rope": true,
+      "rope_full_precision": true,
+      "rope_theta": 5000000.0,
+      "rope_type": "default",
+      "rope_factor": null,
+      "rope_high_freq_factor": null,
+      "rope_low_freq_factor": null,
+      "rope_original_max_position_embeddings": null,
+      "rope_attention_factor": null,
+      "rope_beta_fast": null,
+      "rope_beta_slow": null,
+      "rope_mscale": null,
+      "rope_mscale_all_dim": null,
+      "rope_truncate": null,
+      "attention_type": "sdpa",
+      "full_attention_layers": null,
+      "sliding_attention_rope_scaling": false,
+      "float32_attention": true,
+      "attention_dropout": 0.0,
+      "attention_layer_norm": true,
+      "attention_layer_norm_type": "qwen3",
+      "residual_dropout": 0.1,
+      "response_residual_dropout": 0.0,
+      "layer_norm_type": "rms",
+      "layer_norm_with_affine": true,
+      "layer_norm_eps": 1e-06,
+      "attention_layer_norm_with_affine": true,
+      "max_sequence_length": 16384,
+      "max_position_embeddings": null,
+      "include_bias": false,
+      "bias_for_layer_norm": null,
+      "norm_after": false,
+      "moe_num_experts": 8,
+      "moe_top_k": 2,
+      "moe_mlp_impl": "sparse",
+      "moe_log_expert_assignment": false,
+      "moe_shared_expert": false,
+      "moe_lbl_in_fp32": false,
+      "moe_interleave": false,
+      "moe_loss_weight": 0.1,
+      "moe_zloss_weight": null,
+      "moe_dropless": true,
+      "moe_capacity_factor": 1.25,
+      "embedding_dropout": 0.0,
+      "scale_logits": false,
+      "vocab_size": 151936,
+      "additional_vocab_size": 128,
+      "weight_tying": true,
+      "embedding_size": 151936,
+      "use_position_ids": true,
+      "tokenizer": {
+        "identifier": "Qwen/Qwen3-4B-Instruct-2507",
+        "tokenizer_dir": null
+      },
+      "can_predict_extra_tokens": false,
+      "init_path": "/tmp/trajvlm-test-data/pretrained_llms/qwen3-4b-instruct.pt",
+      "init_incremental": null,
+      "new_embedding_init_range": 0.02,
+      "initializer_range": 0.02,
+      "normalize_input_embeds": false,
+      "activation_checkpoint": "whole_layer",
+      "compile": "blocks",
+      "fix_pad_tokenizer": false,
+      "init_std": 0.02,
+      "init_fn": "normal",
+      "init_cutoff_factor": null
+    },
+    "vision_backbone": {
+      "vit": {
+        "image_model_type": "siglip",
+        "image_default_input_size": [
+          378,
+          378
+        ],
+        "image_patch_size": 14,
+        "image_pos_patch_size": 14,
+        "image_emb_dim": 1152,
+        "image_num_heads": 16,
+        "image_num_key_value_heads": 16,
+        "image_num_layers": 27,
+        "image_head_dim": 72,
+        "image_mlp_dim": 4304,
+        "image_mlp_activations": "gelu_pytorch_tanh",
+        "image_dropout_rate": 0.0,
+        "image_num_pos": 729,
+        "image_norm_eps": 1e-06,
+        "attention_dropout": 0.0,
+        "residual_dropout": 0.0,
+        "initializer_range": 0.02,
+        "float32_attention": true,
+        "attention_type": "sdpa",
+        "sdpa_backend": "all",
+        "activation_checkpointing": true,
+        "init_path": "/tmp/trajvlm-test-data/pretrained_image_encoders/siglip2-so400m-14-384.pt",
+        "resize_mode": "siglip",
+        "pad_value": 0.0,
+        "normalize": "siglip"
+      },
+      "image_pooling_2d": "attention_meanq",
+      "pooling_attention_mask": true,
+      "image_projector": "mlp",
+      "image_padding_embed": null,
+      "vit_layers": [
+        -1
+      ],
+      "skip_unused_layers": true,
+      "use_deepstack": false,
+      "share_connector": false,
+      "image_feature_dropout": 0.0,
+      "connector_activation_checkpointing": true,
+      "compile_vit": "blocks",
+      "compile_connector": null,
+      "normalize_on_gpu": false,
+      "segmenter_input_res": 224,
+      "segmenter_latent_res": 56,
+      "num_traj": 128,
+      "segment_embed_dim": 512,
+      "cross_attn_depth": 2,
+      "cross_attn_heads": 8,
+      "frames_per_pool": 8,
+      "attend_other_latents": false,
+      "num_latent_per_traj": 1,
+      "pretrained_segmenter_path": null,
+      "segmenter_traj_model_kwargs": {},
+      "segmenter_backbone_kwargs": {},
+      "segmenter_perceiver_kwargs": {}
+    },
+    "mm_preprocessor": {
+      "max_answer_len": null,
+      "last_message_loss_only": false,
+      "max_text_tokens": null,
+      "loss_token_weighting": "root_subsegments_root_tokens",
+      "video": {
+        "max_frames": 8,
+        "frame_sample_mode": "fps",
+        "candidate_sampling_fps": [
+          0.25,
+          0.5,
+          1.0,
+          2.0,
+          4.0,
+          6.0,
+          8.0,
+          16.0
+        ],
+        "cache_videos": true,
+        "loading_method": "decord_with_av_fallback",
+        "max_fps": null,
+        "time_sampling": false,
+        "time_mode": "per-frame-compact",
+        "subtitle_mode": "frame_1",
+        "pooling_w": 3,
+        "pooling_h": 3,
+        "use_frame_special_tokens": true,
+        "per_frame_special_token": false,
+        "max_subtitle_tokens": null,
+        "image_res": 378,
+        "num_traj": 128,
+        "num_frames": 128,
+        "frames_per_clip": 16,
+        "normalize_on_gpu": false
+      },
+      "image": {
+        "crop_mode": "resize",
+        "use_col_tokens": true,
+        "max_crops": 6,
+        "high_res_max_crops": 24,
+        "p_high_res": 0.0,
+        "pooling_w": 2,
+        "pooling_h": 2,
+        "overlap_margins": [
+          4,
+          4
+        ],
+        "max_images": null,
+        "max_multi_image_crops": 4,
+        "multi_image_pooling_w": 2,
+        "multi_image_pooling_h": 2,
+        "use_single_crop_col_tokens": null,
+        "use_single_crop_start_token": false,
+        "image_res": 378,
+        "num_traj": 128,
+        "normalize_on_gpu": false
+      }
+    },
+    "bi_directional_attn": null,
+    "cp_enabled": false,
+    "apply_cp_to_vision_backbone": false
+  },
+  "data": {
+    "dataset": null,
+    "mixture": null,
+    "root_size_mixture": null,
+    "kwargs_mixture": [
+      {
+        "rate": 0.15,
+        "datasets": [
+          {
+            "dataset_name": "pixmo_ask_model_anything",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "pixmo_cap",
+            "sampling_rate": null,
+            "root_size_factor": 100000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "pixmo_cap_qa_as_user_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_human_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vixmo3_top_level_captions_min_3",
+            "sampling_rate": 1.5,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.1,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          }
+        ],
+        "name": "demo"
+      },
+      {
+        "rate": 0.2,
+        "datasets": [
+          {
+            "dataset_name": "tgif",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "tvqa_with_sub",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "paxion",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "llava_video_mc_academic",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "llava_video_oe_academic",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "perception_test",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "nextqa_mc",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "news_video_qa_filtered",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "how2qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "sutd_trafficqa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "social_iq2",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "sportsqa_oe",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cinepile_with_sub",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "clevrer",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "funqa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "star",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "intent_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "video_localized_narratives",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "road_text_vqa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "countix_oe",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "camerabench_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "motionbench_train",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "moments_in_time_qa",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "kinetics_qa",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "charades_sta_all_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "coin_all_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "youcook2_all_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "activitynet_all_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "ego4d_all",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "epic_kitchens_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "video_localized_narratives_caption",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "qv_highlights",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_syn_captions_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_syn_captions_subtitle_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          }
+        ],
+        "name": "video_academic"
+      },
+      {
+        "rate": 0.25,
+        "datasets": [
+          {
+            "dataset_name": "coco_2014_vqa_multi",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "text_vqa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "okvqa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "chart_qa_weighted",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "doc_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "info_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "ai2_diagram_v2_mix_transparent",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "a_okvqa_mc",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "a_okvqa_da",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "science_qa_img",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "tabwmp_da",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "st_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "tally_qa",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "dv_qa",
+            "sampling_rate": null,
+            "root_size_factor": 10000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "figure_qa",
+            "sampling_rate": null,
+            "root_size_factor": 10000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "plot_qa",
+            "sampling_rate": null,
+            "root_size_factor": 20000.0,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_chart_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_chemical_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_diagram_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_document",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_math_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_music_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "cosyn_table_exp",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          }
+        ],
+        "name": "image_academic"
+      },
+      {
+        "rate": 0.15,
+        "datasets": [
+          {
+            "dataset_name": "mevis_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "ref_yt_vos_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lv_vis_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vicas_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": 30000.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "revos_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_video_track",
+            "sampling_rate": 0.36036036036036034,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "burst_track",
+            "sampling_rate": 0.04504504504504504,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "ref_davis17_track",
+            "sampling_rate": 0.04504504504504504,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "yt_vis_track",
+            "sampling_rate": 0.04504504504504504,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "moca_track",
+            "sampling_rate": 0.04504504504504504,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "mevis_ground",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lv_vis_ground",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vicas_ground",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": 30000.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "revos_ground",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_video_track_ground",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "burst_ground",
+            "sampling_rate": 0.009009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "moca_ground",
+            "sampling_rate": 0.009009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "mevis_single_point_track",
+            "sampling_rate": 0.13513513513513511,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lv_vis_single_point_track",
+            "sampling_rate": 0.13513513513513511,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vicas_single_point_track",
+            "sampling_rate": 0.13513513513513511,
+            "root_size_factor": 30000.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "revos_single_point_track",
+            "sampling_rate": 0.13513513513513511,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "molmo2_video_single_point_track",
+            "sampling_rate": 0.13513513513513511,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "webuav_single_point_track",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "got10k_single_point_track",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vasttrack_single_point_track",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "trackingnet_single_point_track",
+            "sampling_rate": 0.18018018018018017,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "burst_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lvosv1_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lvosv2_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "lasot_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "uwcot_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "webuot_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "latot_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "tnl2k_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "tnllt_single_point_track",
+            "sampling_rate": 0.09009009009009009,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          }
+        ],
+        "name": "tracking"
+      },
+      {
+        "rate": 0.15,
+        "datasets": [
+          {
+            "dataset_name": "vixmo_points_minmax_0_5",
+            "sampling_rate": 0.4,
+            "root_size_factor": 1.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vixmo_points_minmax_6_25",
+            "sampling_rate": 0.3,
+            "root_size_factor": 1.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "vixmo_points_minmax_26_60",
+            "sampling_rate": 0.1,
+            "root_size_factor": 1.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "academic_points_clip_63s_2fps",
+            "sampling_rate": 0.2,
+            "root_size_factor": 1.0,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": null
+          }
+        ],
+        "name": "video_pointing"
+      },
+      {
+        "rate": 0.1,
+        "datasets": [
+          {
+            "dataset_name": "pixmo_points_train",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": 0.3
+          },
+          {
+            "dataset_name": "pixmo_count_train",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": 0.3
+          },
+          {
+            "dataset_name": "pixmo_points_high_freq_train",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": 0.3
+          },
+          {
+            "dataset_name": "cosyn_point",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": {
+              "weight": 0.2,
+              "root_subsegments": false,
+              "root_length": false
+            },
+            "override_p_high_res": 0.3
+          }
+        ],
+        "name": "image_pointing"
+      },
+      {
+        "rate": 0.1,
+        "datasets": [
+          {
+            "dataset_name": "tulu4",
+            "sampling_rate": null,
+            "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          }
+        ],
+        "name": "nlp"
+      }
+    ],
+    "split": "train",
+    "seed": 50189,
+    "pad": "to_max",
+    "sequence_length": 16384,
+    "max_text_seq_len": null,
+    "shuffle": true,
+    "start_index": 0,
+    "packing": {
+      "buffer_size": 48,
+      "mode": "dynamic_solver",
+      "text_weight": 1.0,
+      "image_weight": 30.0,
+      "shortcut_max_len_images": false,
+      "track_packing_state": true,
+      "cp_world_size": 1
+    },
+    "enable_variable_sized_token_pooling": true,
+    "num_workers": 6,
+    "drop_last": true,
+    "pin_memory": true,
+    "prefetch_factor": 4,
+    "persistent_workers": false,
+    "timeout": 0
+  },
+  "optimizer": {
+    "name": "adamw",
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "betas": [
+      0.9,
+      0.95
+    ],
+    "eps": 1e-05,
+    "connector_learning_rate": 5e-06,
+    "vit_learning_rate": 5e-06,
+    "llm_learning_rate": 1e-05,
+    "frame_selector_learning_rate": 0.0001,
+    "connector_weight_decay": 0.0,
+    "vit_weight_decay": 0.0,
+    "llm_weight_decay": 0.0,
+    "frame_selector_weight_decay": 0.0,
+    "connector_betas": [
+      0.9,
+      0.95
+    ],
+    "vit_betas": [
+      0.9,
+      0.95
+    ],
+    "llm_betas": [
+      0.9,
+      0.95
+    ],
+    "frame_selector_betas": [
+      0.9,
+      0.95
+    ],
+    "connector_eps": 1e-06,
+    "vit_eps": 1e-06,
+    "llm_eps": 1e-06,
+    "frame_selector_eps": 1e-06,
+    "metrics_log_interval": -1
+  },
+  "scheduler": {
+    "name": "multimodal",
+    "units": "steps",
+    "t_warmup": 100,
+    "t_max": null,
+    "alpha_f": 0.1,
+    "connector_t_warmup": 200,
+    "vit_t_warmup": 200,
+    "llm_t_warmup": 200,
+    "frame_selector_t_warmup": 200,
+    "temporal_token_scorer_t_warmup": 200,
+    "grad_clip_warmup_steps": null,
+    "grad_clip_warmup_factor": null,
+    "warmup_min_lr": 0.0
+  },
+  "fsdp": {
+    "fsdp2": true,
+    "precision": "pure",
+    "use_orig_params": true,
+    "wrapping_strategy": null,
+    "sharding_strategy": "ShardingStrategy.FULL_SHARD",
+    "hybrid_sharding_num_model_replicas": null
+  },
+  "global_train_batch_size": 128,
+  "device_train_microbatch_size": 2,
+  "max_duration": 300000,
+  "stop_at": 300000,
+  "compile": null,
+  "compile_loss": false,
+  "seed": 6198,
+  "ft_connector": true,
+  "ft_llm": true,
+  "ft_vit": true,
+  "eval_interval": -1,
+  "inf_eval_interval": -1
+}

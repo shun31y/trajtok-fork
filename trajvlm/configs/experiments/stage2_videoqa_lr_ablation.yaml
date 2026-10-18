@@ -1,0 +1,6 @@
+extends: [stage2_videoqa.yaml]
+run:
+  name: stage2_videoqa_lr1e5
+  output_dir: ../../results/stage2_videoqa_lr1e5
+training:
+  connector_learning_rate: 1e-5

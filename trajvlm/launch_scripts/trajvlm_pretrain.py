@@ -25,46 +25,10 @@ from typing import cast
 # ---- Re-type molmo2 dataclasses BEFORE they're touched by the trainer modules ----
 # Same shim pattern as before; we re-bind the 'video_olmo' model name to our
 # subclass so TrainConfig.load resolves resumed configs to TrajVlmConfig.
-import dataclasses as _dc
-from olmo.models.molmo2.molmo2 import Molmo2Config
-from olmo.models.molmo2.molmo2_preprocessor import Molmo2PreprocessorConfig
-from olmo.nn.siglip2_trajgroup_vision_backbone import (
-    SigLip2TrajGroupVisionBackboneConfig,
+from olmo.models.trajvlm_config import (
+    TrajVlmConfig, TrajVlmPreprocessorConfig, Molmo2Config,
+    SigLip2TrajGroupVisionBackboneConfig, TrajVitImageConfig, TrajVitVideoConfig,
 )
-from olmo.preprocessing.trajvit_preprocessor import TrajVitImageConfig, TrajVitVideoConfig
-from olmo.models import model_config as _model_config
-
-
-@_dc.dataclass
-class TrajVlmPreprocessorConfig(Molmo2PreprocessorConfig):
-    image: TrajVitImageConfig = _dc.field(default_factory=TrajVitImageConfig)
-    video: TrajVitVideoConfig = _dc.field(default_factory=TrajVitVideoConfig)
-
-
-@_dc.dataclass
-class TrajVlmConfig(Molmo2Config):
-    vision_backbone: SigLip2TrajGroupVisionBackboneConfig = _dc.field(
-        default_factory=SigLip2TrajGroupVisionBackboneConfig,
-    )
-    mm_preprocessor: TrajVlmPreprocessorConfig = _dc.field(default_factory=TrajVlmPreprocessorConfig)
-
-
-# Keep the same _model_name so checkpoints saved/loaded as 'video_olmo' resolve to us.
-TrajVlmConfig._model_name = Molmo2Config._model_name  # "video_olmo"
-
-
-def _patched_get_model_types():
-    from olmo.models.molmo.molmo import MolmoConfig
-    from olmo.models.molmo_point.molmo_point import MolmoPointConfig
-    return {
-        MolmoConfig._model_name: MolmoConfig,
-        TrajVlmConfig._model_name: TrajVlmConfig,       # overrides Molmo2Config
-        MolmoPointConfig._model_name: MolmoPointConfig,
-        "token_indexing_video_molmo2": MolmoPointConfig,
-    }
-
-
-_model_config.get_model_types = _patched_get_model_types
 
 # Now the rest of the imports (which transitively construct structured schemas).
 from omegaconf import OmegaConf, omegaconf  # noqa: E402
@@ -77,10 +41,6 @@ from olmo.model_configs import LLMS  # noqa: E402
 from olmo.models.model import FSDPWrapStrategy  # noqa: E402
 from olmo.models.molmo2.molmo2 import Molmo2  # noqa: E402
 from olmo.preprocessing.data_formatter import DataFormatter  # noqa: E402
-
-# trainer_config also caches get_model_types lookups — re-bind there too.
-from olmo.train import trainer_config as _trainer_config  # noqa: E402
-_trainer_config.get_model_types = _patched_get_model_types
 
 from olmo.train.optim import OptimizerConfig, OptimizerType, SchedulerConfig, SchedulerType
 from olmo.train.run_trainer import run_trainer
@@ -180,8 +140,7 @@ def build_model_cfg(
     )
 
 
-def main():
-    prepare_torchrun_environment()
+def make_parser():
     parser = argparse.ArgumentParser(prog="TrajVLM pretrain")
     parser.add_argument("--llm", default="qwen3_4b_instruct", choices=list(LLMS.keys()))
     parser.add_argument("--save_folder", required=True)
@@ -214,7 +173,11 @@ def main():
                         help="Fraction of pointing data (pixmo_points*, pixmo_count, cosyn_point). 0.0 to disable.")
     parser.add_argument("--no_compile", action="store_true",
                         help="Disable torch.compile. Use this if you hit triton cache errors.")
-    args, other_args = parser.parse_known_args()
+    return parser
+
+
+def build_train_config(args, other_args=(), *, dataset_size=None, configure=None):
+    """Construct settings; explicit duration avoids all dataset access."""
 
     if args.pretrained_segmenter_path.lower() == "none":
         seg_ckpt = None
@@ -250,7 +213,7 @@ def main():
         duration = 200
     else:
         from olmo.data.pixmo_datasets import PixMoCap
-        n = len(PixMoCap("train", "captions"))
+        n = dataset_size() if dataset_size is not None else len(PixMoCap("train", "captions"))
         duration = 4 * (n + args.global_batch_size - 1) // args.global_batch_size
 
     is_debug = args.debug or args.mixed_debug
@@ -411,13 +374,22 @@ def main():
         evaluators=[evaluator, second_evaluator],
     )
 
+    if configure is not None:
+        configure(cfg)
+
     # Allow CLI dotlist overrides via omegaconf, but be tolerant of unknown keys.
     if other_args:
         conf = OmegaConf.structured(cfg)
         conf.merge_with_dotlist([clean_opt(arg) for arg in other_args])
         cfg = cast(TrainConfig, OmegaConf.to_object(conf))
 
-    run_trainer(cfg)
+    return cfg
+
+
+def main():
+    args, other_args = make_parser().parse_known_args()
+    prepare_torchrun_environment()
+    run_trainer(build_train_config(args, other_args))
 
 
 if __name__ == "__main__":
