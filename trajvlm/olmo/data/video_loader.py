@@ -62,7 +62,7 @@ def get_sampling_fps(
     max_frames: int,
     total_frames: int,
     frame_sample_mode: str,
-    candidate_sampling_fps: Tuple[float],
+    candidate_sampling_fps: Tuple[float, ...],
 ) -> float:
     """
     Get the sampling fps that best spans the video and has the most frames sampled
@@ -127,7 +127,7 @@ class TimeSampler:
     """Decides how to sample timestamps from a video based on duration"""
     max_frames: int = 8
     frame_sample_mode: str = "fps",
-    candidate_sampling_fps: Tuple[float] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
+    candidate_sampling_fps: Tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
     max_fps: Union[float, None, Tuple[Optional[float]]] = None
     is_training: bool = False
 
@@ -187,7 +187,7 @@ class FrameSampler:
     """Decides how to sample frames from a video based on number of frames"""
     max_frames: int = 8
     frame_sample_mode: str = "fps"
-    candidate_sampling_fps: Tuple[float] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
+    candidate_sampling_fps: Tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
     rng: np.random.RandomState = None
     min_fps: int = None
     is_training: bool = False
@@ -281,10 +281,10 @@ class FrameSampler:
 class VideoLoaderConfig(BaseConfig):
     max_frames: int = 8
     frame_sample_mode: str = "fps"
-    candidate_sampling_fps: Tuple[float] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
+    candidate_sampling_fps: Tuple[float, ...] = (0.25, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 16.0)
     cache_videos: bool = True
     loading_method: str = "decord_with_av_fallback"
-    max_fps: Optional[Tuple[float]] = None
+    max_fps: Optional[Tuple[float, ...]] = None
     time_sampling: bool = False
 
     def build_video_loader(self) -> 'VideoLoader':

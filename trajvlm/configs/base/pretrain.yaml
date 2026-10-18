@@ -1,0 +1,30 @@
+schema_version: 1
+stage: pretrain
+model:
+  llm: qwen3_4b_instruct
+  segmenter_path: ${oc.env:MOLMO_DATA_DIR}/checkpoints/segmenter_filteredmixdata_all.pth
+  num_traj: 128
+  image_res: 378
+data:
+  mixture: pixmo_cap
+  num_workers: 2
+training:
+  # Reference: approximately four caption epochs at batch 128 in the original run.
+  # This is a fixed step budget, not a guarantee of four epochs on filtered data.
+  max_steps: 22347
+  global_batch_size: 128
+  micro_batch_size: 4
+  seq_len: 2536
+  connector_learning_rate: 2e-4
+  vit_learning_rate: 6e-6
+  llm_learning_rate: 2e-5
+  connector_warmup: 200
+  vit_warmup: 2000
+  llm_warmup: 2000
+  compile: false
+evaluation:
+  enabled: false
+  tasks: []
+  loss_tasks: []
+tracking:
+  enabled: false

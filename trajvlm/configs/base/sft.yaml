@@ -1,0 +1,29 @@
+schema_version: 1
+stage: sft
+model:
+  # Match scripts/sft.sh; legacy direct Python invocation defaults to 128 / 16.
+  num_frames: 64
+  frames_per_clip: 8
+data:
+  mixture: video_academic
+  datasets: null  # all VIDEO_ACADEMIC_DATASETS; set a list for a prepared subset
+  num_workers: 6
+  prefetch_factor: 4
+training:
+  max_steps: 300000
+  global_batch_size: 128
+  micro_batch_size: 1
+  seq_len: 16384
+  connector_learning_rate: 5e-6
+  vit_learning_rate: 5e-6
+  llm_learning_rate: 1e-5
+  connector_warmup: 200
+  vit_warmup: 200
+  llm_warmup: 200
+  compile: false
+evaluation:
+  enabled: false
+  tasks: []
+  loss_tasks: []
+tracking:
+  enabled: false

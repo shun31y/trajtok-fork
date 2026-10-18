@@ -424,7 +424,7 @@ class LlmConfig(BaseConfig):
     Attention implementation to use.
     """
 
-    full_attention_layers: Optional[Tuple[int]] = None
+    full_attention_layers: Optional[Tuple[int, ...]] = None
     """
     If provided, apply full attention to the layers in the list while applying sliding attention to the rest.
     """
