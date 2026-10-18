@@ -62,6 +62,8 @@ Use `configs/experiments/stage1_pixmo_cap.yaml` or `stage2_videoqa.yaml` with
 an experiment without GPUs or downloaded weights. Stage2 inspection requires
 checkpoint configuration metadata. Recipes support `extends`, typed CLI
 `--set` overrides, explicit data/evaluation selection, and per-run provenance.
+Select `model.llm: qwen2.5_7b_instruct` to use Qwen2.5-7B-Instruct; dedicated
+Stage1/Stage2 recipes are also provided.
 See [UV_SETUP.md](UV_SETUP.md#yaml-experiment-management) for examples, training
 and resume commands. Existing shell/CLI launchers remain supported.
 

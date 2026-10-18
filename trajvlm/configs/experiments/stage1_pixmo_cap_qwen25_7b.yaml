@@ -1,0 +1,6 @@
+extends: [stage1_pixmo_cap.yaml]
+run:
+  name: stage1_pixmo_cap_qwen25_7b
+  output_dir: ../../results/stage1_pixmo_cap_qwen25_7b
+model:
+  llm: qwen2.5_7b_instruct
