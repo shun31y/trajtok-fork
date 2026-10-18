@@ -265,3 +265,60 @@ uv run --project trajvlm --locked --extra train python -m unittest discover \
 
 The checkpoint tests require permission to create local loopback sockets.
 GPU/FSDP execution is still unverified on this host.
+
+## Qwen2.5-7B-Instruct as the base LLM
+
+Choose the model in a Stage1 recipe:
+
+```yaml
+model:
+  llm: qwen2.5_7b_instruct
+```
+
+Or pass `--set model.llm=qwen2.5_7b_instruct` to the YAML launcher. Dedicated
+recipes are available as `stage1_pixmo_cap_qwen25_7b.yaml` and
+`stage2_videoqa_qwen25_7b.yaml`. Existing default recipes continue to use
+Qwen3-4B-Instruct. Data, batch size, learning rates, duration and PEFT settings
+are unchanged by the new recipes.
+
+Before a real training run, prepare the Qwen2.5 weights with:
+
+```bash
+source trajvlm/scripts/data_env.sh
+uv run --project trajvlm --locked --extra train python \
+  trajvlm/scripts/prepare_pretrained_model.py qwen2.5_7b_instruct --unsharded
+```
+
+This command downloads the actual 7B model from `Qwen/Qwen2.5-7B-Instruct`
+and converts its QKV biases, MLP and independent output head to native format.
+It writes `$MOLMO_DATA_DIR/pretrained_llms/qwen2.5-7b-instruct.pt`.
+`--unsharded` is required here: the LLM initialization path expects a .pt file.
+The conversion uses float32 host weights and requires sufficient CPU memory
+and storage. The model weights have not been downloaded by this change.
+
+Preview Stage1 without those weights:
+
+```bash
+uv run --project trajvlm --locked --extra train python \
+  trajvlm/launch_scripts/trajvlm_experiment.py \
+  --config trajvlm/configs/experiments/stage1_pixmo_cap_qwen25_7b.yaml --print-config
+```
+
+For Stage2, use `stage2_videoqa_qwen25_7b.yaml` with the checkpoint from the
+Qwen2.5 Stage1 run, overriding `checkpoint` if the path or step differs.
+Stage2 inherits the LLM architecture, tokenizer and projector output dimension
+from that checkpoint; do not set `model.llm` again or substitute a Qwen3
+checkpoint. The existing `message_format: qwen3` label denotes the common
+ChatML user/assistant boundary format and is also used for this Qwen2.5 model.
+Its tokenizer is correctly selected as `Qwen/Qwen2.5-7B-Instruct`.
+
+CPU tests use a small randomly initialized HF Qwen2 model (no downloaded
+weights), compare converted logits numerically, and test pretrained loading,
+LoRA and configuration inheritance:
+
+```bash
+uv run --project trajvlm --locked --extra train python -m unittest discover \
+  -s trajvlm/tests -p test_qwen25.py -v
+```
+
+Actual 7B-weight conversion and GPU training remain unverified.

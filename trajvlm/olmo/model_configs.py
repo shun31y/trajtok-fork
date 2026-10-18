@@ -245,6 +245,36 @@ OLMO3_7B_INSTRUCT = LlmConfig(
 )
 
 
+# Official Qwen/Qwen2.5-7B-Instruct config: QKV biases, no Q/K norm,
+# and a separate LM head (unlike the Qwen3 defaults below).
+QWEN25_7B_INSTRUCT = LlmConfig(
+    init_path="${oc.env:MOLMO_DATA_DIR}/pretrained_llms/qwen2.5-7b-instruct.pt",
+    vocab_size=152064,
+    embedding_size=152064,
+    max_sequence_length=32768,
+    d_model=3584,
+    mlp_hidden_size=18944 * 2,
+    n_layers=28,
+    n_heads=28,
+    n_kv_heads=4,
+    head_dim=128,
+    residual_dropout=0,
+    embedding_dropout=0,
+    response_residual_dropout=0,
+    attention_dropout=0,
+    attention_layer_norm=False,
+    qkv_bias=True,
+    weight_tying=False,
+    include_bias=False,
+    rope=True,
+    rope_theta=1000000.0,
+    layer_norm_eps=1e-6,
+    layer_norm_type=LayerNormType.rms,
+    additional_vocab_size=128,
+    tokenizer=TokenizerConfig(identifier="Qwen/Qwen2.5-7B-Instruct"),
+)
+
+
 QWEN3_4B = LlmConfig(
     init_path="${oc.env:MOLMO_DATA_DIR}/pretrained_llms/qwen3-4b.pt",
     vocab_size=151936,
@@ -359,6 +389,7 @@ VISION_BACKBONES: Dict[str, VitConfig] = {
 
 
 LLMS: Dict[str, LlmConfig] = {
+    "qwen2.5_7b_instruct": QWEN25_7B_INSTRUCT,
     "olmo3_7b_instruct": OLMO3_7B_INSTRUCT,
     "qwen3_8b_base": QWEN3_8B_BASE,
     "qwen3_8b": QWEN3_8B,

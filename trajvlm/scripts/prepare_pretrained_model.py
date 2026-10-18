@@ -428,11 +428,49 @@ def convert_state_dict_qwen3(state_dict, config: LlmConfig, block_type: BlockTyp
     return out
 
 
+def convert_state_dict_qwen25(state_dict, config: LlmConfig, block_type: BlockType) -> Dict[str, Any]:
+    """Map HF Qwen2.5 to native fused-QKV/SwiGLU, including QKV biases."""
+    if block_type != BlockType.sequential or not config.qkv_bias or config.attention_layer_norm or config.weight_tying:
+        raise ValueError("Qwen2.5 conversion requires sequential blocks, QKV bias, no Q/K norm and an untied head")
+    # Pop from a shallow copy so callers keep their source state dict intact.
+    remaining = dict(state_dict)
+    converted = {}
+    for layer in range(config.n_layers):
+        source = f"model.layers.{layer}."
+        target = f"transformer.blocks.{layer}."
+        for kind in ('weight', 'bias'):
+            converted[target + f'att_proj.{kind}'] = torch.cat([
+                remaining.pop(source + f'self_attn.{projection}_proj.{kind}')
+                for projection in ('q', 'k', 'v')
+            ], dim=0)
+        for src, dst in (
+            ('self_attn.o_proj.weight', 'attn_out.weight'),
+            ('mlp.down_proj.weight', 'ff_out.weight'),
+            ('input_layernorm.weight', 'attn_norm.weight'),
+            ('post_attention_layernorm.weight', 'ff_norm.weight'),
+        ):
+            converted[target + dst] = remaining.pop(source + src)
+        # Native SwiGLU splits [up, gate] and computes up * silu(gate).
+        converted[target + 'ff_proj.weight'] = torch.cat([
+            remaining.pop(source + f'mlp.{projection}_proj.weight')
+            for projection in ('up', 'gate')
+        ], dim=0)
+    converted.update({
+        'transformer.wte.embedding': remaining.pop('model.embed_tokens.weight'),
+        'transformer.ln_f.weight': remaining.pop('model.norm.weight'),
+        'transformer.ff_out.weight': remaining.pop('lm_head.weight'),
+    })
+    if remaining:
+        raise ValueError(f"Unused Qwen2.5 parameters: {sorted(remaining)}")
+    return converted
+
+
 def get_default_load_path(cfg) -> str:
     return "/".join(cfg.init_path.split("/")[1:])
 
 
 CONVERT_FNS = {
+    "qwen2.5_7b_instruct": convert_state_dict_qwen25,
     "openai": convert_state_dict_clip,
     "siglip": convert_state_dict_siglip,
     "siglip2": convert_state_dict_siglip,
@@ -467,6 +505,7 @@ VIT_HF_SOURCES  = {
 
 
 LLM_HF_SOURCES = {
+    "qwen2.5_7b_instruct": "Qwen/Qwen2.5-7B-Instruct",
     "olmoe": "allenai/OLMoE-1B-7B-0924",
     "olmo_1024_preview": "allenai/OLMo-7B-1024-preview",
     "olmo2_1124_7b": "allenai/OLMo-2-1124-7B",
