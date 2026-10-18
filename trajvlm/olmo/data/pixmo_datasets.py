@@ -16,16 +16,17 @@ from olmo.io import file_exists
 from olmo.preprocessing.detect_counting_question import is_pixmo_point_and_count_question
 from olmo.util import flatten_lists, resource_path
 
-if DATA_HOME is not None:
-    PIXMO_DATASETS = join(DATA_HOME, "pixmo_datasets")
-else:
-    PIXMO_DATASETS = None
+# Keep PixMo image bodies and prepared records on a separate disk while model
+# assets and Stage2 video datasets continue to use MOLMO_DATA_DIR.
+PIXMO_HOME = (join(os.environ["PIXMO_DATA_DIR"], "torch_datasets")
+              if "PIXMO_DATA_DIR" in os.environ else DATA_HOME)
+PIXMO_DATASETS = join(PIXMO_HOME, "pixmo_datasets") if PIXMO_HOME is not None else None
 """Where to save local version of the data after URLs filtering"""
 
 if "PIXMO_IMAGE_DIR" in os.environ:
     PIXMO_IMAGES = os.environ["PIXMO_IMAGE_DIR"]
-elif DATA_HOME is not None:
-    PIXMO_IMAGES = join(DATA_HOME, "pixmo_images")
+elif PIXMO_HOME is not None:
+    PIXMO_IMAGES = join(PIXMO_HOME, "pixmo_images")
 else:
     PIXMO_IMAGES = None
 """Where to save downloaded images"""
