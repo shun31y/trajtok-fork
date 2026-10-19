@@ -28,7 +28,10 @@ ENV/
 # Project-specific
 results/
 checkpoints/
+!trajvlm/olmo/checkpoints/
 logs/
+*.log
+*.log.*
 wandb/
 *.pth
 *.pt

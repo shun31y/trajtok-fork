@@ -70,6 +70,54 @@ class Experiments(unittest.TestCase):
         self.assertIsInstance(restored.model, TrajVlmConfig)
         self.assertEqual(serial(restored), serial(cfg))
 
+    def test_100k_qwen25_lora_pretrain(self):
+        path = ROOT / 'configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml'
+        cfg = build_experiment(load_experiment(path))
+        self.assertEqual(cfg.max_duration, 3128)
+        self.assertEqual(cfg.stop_at, 3128)
+        self.assertTrue(cfg.ft_connector)
+        self.assertTrue(cfg.ft_llm)
+        self.assertFalse(cfg.ft_vit)
+        self.assertEqual(cfg.model.llm.lora.rank, 16)
+        self.assertEqual(cfg.model.llm.lora.target_modules, ['att_proj', 'attn_out'])
+        self.assertEqual(cfg.save_interval, 782)
+        self.assertEqual(cfg.device_train_microbatch_size, 1)
+        self.assertIsNotNone(cfg.wandb)
+        self.assertEqual(cfg.wandb.project, 'test-project')
+        self.assertEqual(cfg.wandb.entity, 'test-entity')
+        self.assertEqual(cfg.eval_interval, 782)
+        self.assertEqual(len(cfg.evaluators), 2)
+        self.assertEqual({ev.data.dataset for ev in cfg.evaluators},
+                         {'pixmo_cap', 'pixmo_cap_with_transcripts'})
+        for ev in cfg.evaluators:
+            self.assertEqual(ev.data.split, 'validation')
+            self.assertEqual(ev.max_examples, 2000)
+        self.assertEqual(cfg.inf_evaluators, [])
+
+    def test_configured_gpu_launch(self):
+        path = ROOT / 'configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml'
+        with patch.dict(os.environ), patch('launch_scripts.trajvlm_experiment.subprocess.run') as run:
+            os.environ.pop('RANK', None)
+            os.environ.pop('WORLD_SIZE', None)
+            os.environ['PIXMO_CAP_DATASET'] = '/wrong/inherited/path'
+            run.return_value.returncode = 0
+            override = f'run.output_dir={self.root}/launch-test'
+            self.assertEqual(main(['--config', str(path), '--launch', '--set', override,
+                                   '--set', 'launch.gpus=[2,3]']), 0)
+            command = run.call_args.args[0]
+            self.assertIn('--nproc_per_node=2', command)
+            self.assertNotIn('--launch', command)
+            self.assertIn(override, command)
+            self.assertEqual(run.call_args.kwargs['env']['CUDA_VISIBLE_DEVICES'], '2,3')
+            self.assertEqual(run.call_args.kwargs['env']['PIXMO_CAP_DATASET'],
+                             load_experiment(path).recipe.data.pixmo_cap_path)
+            self.assertFalse((self.root / 'launch-test').exists())
+
+    def test_invalid_gpu_selection(self):
+        for selection in ('[]', '[0,0]', '[-1]'):
+            with self.subTest(selection=selection), self.assertRaises(ValueError):
+                self.experiment(overrides=[f'launch.gpus={selection}'])
+
     def test_stage2_video_subset_and_metadata_only(self):
         exp = self.experiment(2, ['data.datasets=[tgif,nextqa_mc]'])
         cfg = build_experiment(exp)

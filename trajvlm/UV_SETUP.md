@@ -74,8 +74,10 @@ This setup installs the Python training dependencies and imports the training
 entrypoints. It does not launch training or download model weights. Before
 training, prepare the segmenter/SigLIP2/Qwen3 weights, the DINOv3 source tree,
 and any additional mixture data required by the chosen launch configuration.
-The legacy meta-safe DINOv3 wrapper still contains author-local paths that
-must be made portable during model preparation.
+The meta-safe DINOv3 wrapper uses `DINOV3_SOURCE_DIR`, defaulting to
+`$MOLMO_DATA_DIR/dinov3`, for the official source checkout. The released full
+segmenter checkpoint supplies its ConvNeXt weights; no separate DINOv3
+weight download is needed for these TrajVLM recipes.
 
 On the initial preparation host, `nvidia-smi` could not communicate with the
 NVIDIA driver and `torch.cuda.is_available()` was false. GPU execution is
@@ -366,3 +368,140 @@ records, then starts the SSD downloader. Its status and output are in:
 The last log is created after migration completes. Prepared PixMo records are
 built with SSD image paths; retain this path or regenerate the records if the
 image root changes again. NAS data are not deleted by this migration.
+
+## 100k PixMoCap + Qwen2.5-7B-Instruct LoRA pretraining
+
+From the repository root:
+
+```bash
+source trajvlm/configs/experiments/stage1_pixmo_cap_100k.env.sh
+export WANDB_PROJECT=trajvlm
+export WANDB_ENTITY=YOUR_WANDB_USER_OR_TEAM
+trajvlm/.venv/bin/python trajvlm/launch_scripts/trajvlm_experiment.py \
+  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml \
+  --print-config
+```
+
+This recipe trains the connector and LLM attention LoRA (rank 16, alpha 32,
+no dropout), freezing the ViT and base LLM. It uses global batch 128,
+microbatch 1, and 3128 steps (four passes of 782 batches for 100000 examples).
+Learning rates and warmup settings inherit the pretraining base: 2e-4 for
+the connector with 200 warmup steps, and 2e-5 for LoRA with 2000 warmup
+steps. Checkpoints are saved every 782 steps, retaining four. Evaluation runs
+every 782 steps on 2000 held-out examples, reporting caption-only loss
+(`pixmo_cap`) and caption/transcript loss (`pixmo_cap_with_transcripts`) to W&B.
+
+Before training, prepare a Hugging Face DatasetDict at `$PIXMO_CAP_DATASET`
+with a `train` split containing 100000 matching image records and a
+`validation` split containing 2000 additional records. Preserve the
+PixMoCap `caption`, `transcripts`, `image_url` and `image` columns; `image`
+training paths must point into `$PIXMO_IMAGE_DIR` (`pixmo_images_100k`).
+Validation paths point into the separate `pixmo_images_eval2k` directory.
+`PIXMO_CAP_DATASET` overrides the prepared PixMoCap dataset location only;
+`PIXMO_IMAGE_DIR` alone does not filter or rewrite prepared records.
+This experiment declares `data.pixmo_cap_path` in YAML. The launcher uses
+that path for training and evaluation, overriding `PIXMO_CAP_DATASET` in
+the parent, torchrun workers and DataLoader workers. To change this recipe's
+dataset, edit that field or use `--set data.pixmo_cap_path=/absolute/path`.
+`data.train_examples` sets the training budget and does not cap dataset size.
+Preparing these records and launching GPU training are separate steps.
+Existing model weights and the segmenter checkpoint are also required.
+
+W&B is enabled by default for this recipe. Set `WANDB_PROJECT` and
+`WANDB_ENTITY` to your project and user/team, and authenticate W&B before
+training. The run name matches `run.name`. To disable tracking, override
+all three fields: `--set tracking.enabled=false --set tracking.project=null
+--set tracking.entity=null`.
+
+GPU selection for this experiment is configured in YAML:
+
+```yaml
+launch:
+  gpus: [0]
+```
+
+After sourcing the environment and configuring W&B as above, launch from the
+repository root with:
+
+```bash
+mkdir -p trajvlm/logs
+set -o pipefail
+trajvlm/.venv/bin/python trajvlm/launch_scripts/trajvlm_experiment.py \
+  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml \
+  --launch 2>&1 | tee "trajvlm/logs/stage1_pixmo_cap_100k_qwen25_7b_lora_$(date +%Y%m%d_%H%M%S).log"
+```
+
+`--launch` sets `CUDA_VISIBLE_DEVICES` to the configured IDs and starts one
+worker per GPU with single-node standalone torchrun. IDs refer to devices
+visible to the host/container before this mask; this replaces any inherited
+`CUDA_VISIBLE_DEVICES`. The global batch must be divisible by GPU count times
+microbatch size. Use `--set 'launch.gpus=[0,1]'` for a temporary override.
+`--print-config` and `--export-config` inspect configuration without launching
+workers, even with `--launch`. Existing direct torchrun commands remain
+supported and control device selection themselves; `launch.gpus` applies to
+`--launch` only.
+
+## Preparing DINOv3 and the existing 100k image subset
+
+The source checkout prepared on this host is:
+
+```text
+$MOLMO_DATA_DIR/dinov3
+facebookresearch/dinov3 commit 6876159a11b4df116f30f667f8c9888617df0751
+```
+
+For another host, clone the official source and pin the same revision:
+
+```bash
+git clone https://github.com/facebookresearch/dinov3.git "$MOLMO_DATA_DIR/dinov3"
+git -C "$MOLMO_DATA_DIR/dinov3" checkout 6876159a11b4df116f30f667f8c9888617df0751
+```
+
+The wrapper imports only the backbone factories, avoiding optional segmentation
+evaluation dependencies. The segmenter loader extracts `vision_encoder.*`
+from the released checkpoint, validates every required key and shape, and
+supports plain tensors and distributed DTensors.
+The loader preserves shared LayerNorm aliases (`norm` / `norms.3`) by
+broadcasting and converting each tensor to the destination mesh/placement
+before copying. CPU tests cover one and two ranks with shared parameters;
+the actual vision backbone's 400 segmenter state entries were also verified
+against the released checkpoint under single-GPU FSDP on this host.
+
+To reproduce the 100k prepared records from the existing SSD metadata cache:
+
+```bash
+source trajvlm/configs/experiments/stage1_pixmo_cap_100k.env.sh
+trajvlm/.venv/bin/python trajvlm/scripts/prepare_pixmo_subset.py \
+  --metadata-dir "$PIXMO_DATA_DIR/hf_datasets/allenai___pixmo-cap/default/0.0.0/edce6390d9d5be6c8db0d863fbe62718c88988a4" \
+  --image-dir "$PIXMO_IMAGE_DIR" \
+  --output "$PIXMO_DATA_DIR/torch_datasets/pixmo_datasets_100k/cap"
+```
+
+This reads cached Arrow metadata without downloading anything, matches images
+by SHA256 of their URL, verifies all image files with Pillow, and preserves
+caption/transcripts. Duplicate URLs use the first metadata record in shard
+order. This initial output has exactly 100000 train records; add the
+validation split with the command below. The script refuses existing
+outputs and publishes only after verification and saving complete.
+`preparation.json` inside the output records the source, counts and duplicate
+policy. It does not copy or alter the original image files.
+
+Add 2000 evaluation images from the full PixMo image cache, excluding all
+training URLs and filenames:
+
+```bash
+trajvlm/.venv/bin/python trajvlm/scripts/prepare_pixmo_validation.py \
+  --train-dataset "$PIXMO_DATA_DIR/torch_datasets/pixmo_datasets_100k/cap" \
+  --metadata-dir "$PIXMO_DATA_DIR/hf_datasets/allenai___pixmo-cap/default/0.0.0/edce6390d9d5be6c8db0d863fbe62718c88988a4" \
+  --image-dir "$PIXMO_DATA_DIR/torch_datasets/pixmo_images" \
+  --output "$PIXMO_CAP_DATASET" \
+  --validation-images "$PIXMO_DATA_DIR/torch_datasets/pixmo_images_eval2k" \
+  --count 2000
+```
+
+The configured dataset is `pixmo_datasets_100k/cap_with_validation` with
+100000 train records and 2000 validation records. All validation images are
+verified before copying. The original train-only dataset is retained.
+Re-source the experiment environment file in existing shells to switch
+`PIXMO_CAP_DATASET` to this combined dataset. No generation-based metrics
+are enabled by this recipe.

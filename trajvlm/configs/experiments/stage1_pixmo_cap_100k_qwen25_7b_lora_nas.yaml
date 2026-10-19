@@ -1,0 +1,7 @@
+# NAS-only variant. Set MOLMO_DATA_DIR to the shared asset root.
+extends: [stage1_pixmo_cap_100k_qwen25_7b_lora.yaml]
+run:
+  name: stage1_pixmo_cap_100k_qwen25_7b_lora_nas
+  output_dir: ../../results/stage1_pixmo_cap_100k_qwen25_7b_lora_nas
+data:
+  pixmo_cap_path: ${oc.env:MOLMO_DATA_DIR}/torch_datasets/pixmo_datasets_100k/cap_with_validation

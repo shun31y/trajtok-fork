@@ -387,7 +387,8 @@ class PixMoCap(Dataset):
         self.split = split
         self.mode = mode
         self.data = datasets.load_from_disk(
-            join(PIXMO_DATASETS, "cap"), keep_in_memory=keep_in_memory)[split]
+            os.environ.get("PIXMO_CAP_DATASET") or join(PIXMO_DATASETS, "cap"),
+            keep_in_memory=keep_in_memory)[split]
 
     def __len__(self):
         return len(self.data)
