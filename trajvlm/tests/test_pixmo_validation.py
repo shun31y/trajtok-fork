@@ -22,6 +22,7 @@ class PixmoValidationTests(unittest.TestCase):
                 return images / hashlib.sha256(url.encode()).hexdigest()
             for url in ('train', 'a', 'b'):
                 Image.new('RGB', (8, 8)).save(image_path(url), format='PNG')
+            image_path('a').chmod(0o600)
             image_path('broken').write_text('invalid image')
             source = Dataset.from_dict(dict(image_url=['train', 'broken', 'a', 'a', 'b'],
                                            caption=['train', 'broken', 'a', 'duplicate', 'b'],
@@ -40,6 +41,7 @@ class PixmoValidationTests(unittest.TestCase):
             for url, path in zip(result['validation']['image_url'], result['validation']['image']):
                 self.assertEqual(Path(path).read_bytes(), image_path(url).read_bytes())
                 self.assertNotEqual(Path(path), image_path(url))
+                self.assertEqual(Path(path).stat().st_mode & 0o444, 0o444)
             with self.assertRaises(FileExistsError):
                 prepare(root / 'train', root, images, root / 'output', root / 'eval-images', count=2)
 

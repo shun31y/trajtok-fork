@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import stat
 
 from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
 from PIL import Image
@@ -54,7 +55,11 @@ def prepare(train_dataset, metadata_dir, image_dir, output, validation_images, c
         raise ValueError(f'Only {len(indices)} / {count} valid held-out images available')
     image_staging.mkdir(parents=True)
     for path, name in zip(sources, names):
-        shutil.copy2(path, image_staging / name)
+        target = image_staging / name
+        shutil.copy2(path, target)
+        # Downloaded cache files may be owner-only. Published data must also
+        # be readable when another server maps the source UID differently.
+        target.chmod(stat.S_IMODE(target.stat().st_mode) | 0o444)
     validation = source.select(indices)
     if 'image' in validation.column_names:
         validation = validation.remove_columns('image')
