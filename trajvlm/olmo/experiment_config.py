@@ -33,6 +33,7 @@ class Model:
 @dataclass
 class Data:
     mixture: str = MISSING
+    pixmo_cap_path: Optional[str] = None
     datasets: Optional[List[str]] = None
     train_examples: Optional[int] = None
     num_workers: int = 2
@@ -73,6 +74,12 @@ class Tracking:
 
 
 @dataclass
+class Launch:
+    # Explicit device IDs; --launch uses one process per listed GPU on one node.
+    gpus: List[int] = field(default_factory=lambda: [0])
+
+
+@dataclass
 class Recipe:
     schema_version: int = 1
     stage: str = MISSING
@@ -80,6 +87,7 @@ class Recipe:
     model: Model = field(default_factory=Model)
     data: Data = field(default_factory=Data)
     training: Training = field(default_factory=Training)
+    launch: Launch = field(default_factory=Launch)
     evaluation: Evaluation = field(default_factory=Evaluation)
     tracking: Tracking = field(default_factory=Tracking)
     peft: Optional[PeftConfig] = None
@@ -94,7 +102,7 @@ class Experiment:
     overrides: List[str]
 
 
-PATH_KEYS = {"run.output_dir", "model.segmenter_path", "checkpoint"}
+PATH_KEYS = {"run.output_dir", "model.segmenter_path", "checkpoint", "data.pixmo_cap_path"}
 # Structural settings must use public recipe fields so all derived values agree.
 TRAINER_OVERRIDES = {
     "save_interval", "save_num_checkpoints_to_keep", "max_grad_norm",
@@ -176,6 +184,9 @@ def _raw_value(conf, key):
 
 
 def validate_recipe(r):
+    if (not r.launch.gpus or len(set(r.launch.gpus)) != len(r.launch.gpus)
+            or any(gpu < 0 for gpu in r.launch.gpus)):
+        raise ValueError('launch.gpus must contain unique nonnegative GPU IDs')
     if r.schema_version != 1:
         raise ValueError('schema_version must be 1')
     if r.stage not in ('pretrain', 'sft'):
@@ -187,9 +198,8 @@ def validate_recipe(r):
     t = r.training
     if r.peft is not None:
         r.peft.validate()
-        expected = 'connector_only' if r.stage == 'pretrain' else 'connector_lora'
-        if r.peft.mode != expected:
-            raise ValueError(f'{r.stage} requires peft.mode={expected}')
+        if r.stage == 'sft' and r.peft.mode != 'connector_lora':
+            raise ValueError('sft requires peft.mode=connector_lora')
     if (t.max_steps is None) == (t.epochs is None):
         raise ValueError('Specify exactly one of training.max_steps or training.epochs')
     positive = {'global_batch_size': t.global_batch_size, 'micro_batch_size': t.micro_batch_size,

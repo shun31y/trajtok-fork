@@ -1,0 +1,37 @@
+# Source stage1_pixmo_cap_100k.env.sh before inspection/training.
+# Requires prepared caption/transcript records for exactly these 100k images;
+# train_examples controls the step budget, not dataset filtering.
+extends: [stage1_pixmo_cap_qwen25_7b.yaml]
+launch:
+  gpus: [0]
+run:
+  name: stage1_pixmo_cap_100k_qwen25_7b_lora
+  output_dir: ../../results/stage1_pixmo_cap_100k_qwen25_7b_lora
+data:
+  pixmo_cap_path: /mnt/ssd2/shun/VideoUnderstanding/trajtok/torch_datasets/pixmo_datasets_100k/cap_with_validation
+  train_examples: 100000
+evaluation:
+  enabled: true
+  tasks: []
+  loss_tasks: [pixmo_cap, pixmo_cap_with_transcripts]
+  interval: 782
+  max_examples: 2000
+training:
+  max_steps: null
+  epochs: 4  # 4 * ceil(100000 / 128) = 3128 optimizer steps
+  global_batch_size: 128
+  micro_batch_size: 1
+peft:
+  mode: connector_lora
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.0
+    target_modules: [att_proj, attn_out]
+trainer_overrides:
+  save_interval: 782
+  save_num_checkpoints_to_keep: 4
+tracking:
+  enabled: true
+  project: ${oc.env:WANDB_PROJECT}
+  entity: ${oc.env:WANDB_ENTITY}

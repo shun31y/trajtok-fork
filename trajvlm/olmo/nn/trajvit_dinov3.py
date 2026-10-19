@@ -1,3 +1,8 @@
+import os
+import importlib
+import sys
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -160,9 +165,41 @@ convnext_sizes = {
 
 
 _DINOV3_CKPT_PATHS = {
-    "base":  "/weka/prior-default/chenhaoz/home/open_videotok/dinov3/dinov3_convnext_base_pretrain_lvd1689m-801f2ba9.pth",
-    "small": "/weka/prior-default/chenhaoz/home/open_videotok/dinov3/dinov3_convnext_small_pretrain_lvd1689m-296db49d.pth",
+    "base": "dinov3_convnext_base_pretrain_lvd1689m-801f2ba9.pth",
+    "small": "dinov3_convnext_small_pretrain_lvd1689m-296db49d.pth",
 }
+
+
+def dinov3_source_dir():
+    source = os.environ.get('DINOV3_SOURCE_DIR')
+    if source is None:
+        root = os.environ.get('MOLMO_DATA_DIR')
+        if root is None:
+            raise ValueError('Set DINOV3_SOURCE_DIR or MOLMO_DATA_DIR for the DINOv3 source tree')
+        source = str(Path(root) / 'dinov3')
+    path = Path(source).expanduser().resolve()
+    if not (path / 'hubconf.py').is_file():
+        raise FileNotFoundError(f'DINOv3 hubconf.py missing in {path}; set DINOV3_SOURCE_DIR')
+    return path
+
+
+def dinov3_weights(model_size):
+    # Not required when loading the full released segmenter checkpoint.
+    return str(dinov3_source_dir() / _DINOV3_CKPT_PATHS[model_size])
+
+
+def build_dinov3(model_size, load_pretrained=False):
+    # Import just the backbone factories: hubconf also imports optional
+    # segmentation/evaluation packages that pretraining does not need.
+    source = str(dinov3_source_dir())
+    sys.path.insert(0, source)
+    try:
+        factories = importlib.import_module('dinov3.hub.backbones')
+        factory = getattr(factories, f'dinov3_convnext_{model_size}')
+        kwargs = {'weights': dinov3_weights(model_size)} if load_pretrained else {}
+        return factory(pretrained=load_pretrained, **kwargs)
+    finally:
+        sys.path.remove(source)
 
 
 class DINOResNetHierFeat(nn.Module):
@@ -176,7 +213,7 @@ class DINOResNetHierFeat(nn.Module):
         """When `load_pretrained=False` (default), the ConvNeXt backbone is constructed
         with random weights and `.load_dinov3_pretrained()` should be called later
         (after meta-device materialisation). When True (legacy), pretrained DINOv3
-        weights are loaded eagerly in __init__ and the whole module is moved to CUDA.
+        weights are loaded eagerly in __init__ on the current device.
         The latter conflicts with Molmo2's meta-device trainer pipeline."""
         super().__init__()
         if model_size not in _DINOV3_CKPT_PATHS:
@@ -184,20 +221,7 @@ class DINOResNetHierFeat(nn.Module):
         self.model_size = model_size
 
         # Build architecture only — defer weight loading to support meta-device init.
-        if load_pretrained:
-            self.backbone = torch.hub.load(
-                '/weka/prior-default/chenhaoz/home/open_videotok/dinov3',
-                f'dinov3_convnext_{model_size}',
-                source='local',
-                weights=_DINOV3_CKPT_PATHS[model_size],
-            ).to('cuda')
-        else:
-            self.backbone = torch.hub.load(
-                '/weka/prior-default/chenhaoz/home/open_videotok/dinov3',
-                f'dinov3_convnext_{model_size}',
-                source='local',
-                pretrained=False,
-            )
+        self.backbone = build_dinov3(model_size, load_pretrained)
         self.upsample_first = upsample_first
 
         hidden_sizes = convnext_sizes[model_size]['dims']
@@ -211,7 +235,7 @@ class DINOResNetHierFeat(nn.Module):
 
     def load_dinov3_pretrained(self):
         """Load DINOv3 pretrained weights into self.backbone (call after materialisation)."""
-        sd = torch.load(_DINOV3_CKPT_PATHS[self.model_size], map_location="cpu", weights_only=True)
+        sd = torch.load(dinov3_weights(self.model_size), map_location="cpu", weights_only=True)
         # torch.hub-built convnext expects a flat state-dict
         msg = self.backbone.load_state_dict(sd, strict=False)
         return msg

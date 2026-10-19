@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from pathlib import Path
 import sys
 
@@ -19,15 +20,35 @@ from olmo.experiment_config import build_experiment, load_experiment, validate_t
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', required=True)
+    parser.add_argument('--launch', action='store_true',
+                        help='Launch single-node torchrun using launch.gpus from the recipe')
     parser.add_argument('--set', action='append', default=[], metavar='KEY=VALUE')
     parser.add_argument('--print-config', action='store_true')
     parser.add_argument('--export-config', type=Path)
     args = parser.parse_args(argv)
     try:
         experiment = load_experiment(args.config, args.set)
+        if experiment.recipe.data.pixmo_cap_path is not None:
+            # Set before any dataset is built, and propagate to torchrun and
+            # DataLoader workers. The explicit recipe wins over inherited env.
+            os.environ['PIXMO_CAP_DATASET'] = experiment.recipe.data.pixmo_cap_path
         cfg = build_experiment(experiment)
         world_size = int(os.environ['WORLD_SIZE']) if 'WORLD_SIZE' in os.environ else None
         validate_train_config(cfg, experiment.recipe, world_size)
+        if args.launch and not (args.print_config or args.export_config is not None):
+            if 'RANK' in os.environ or 'WORLD_SIZE' in os.environ:
+                raise ValueError('--launch must run outside torchrun')
+            gpus = experiment.recipe.launch.gpus
+            validate_train_config(cfg, experiment.recipe, len(gpus))
+            from olmo.experiment_records import check_output
+            check_output(experiment)
+            command = [sys.executable, '-m', 'torch.distributed.run', '--standalone',
+                       f'--nproc_per_node={len(gpus)}', str(Path(__file__).resolve()),
+                       '--config', str(Path(args.config).resolve())]
+            for override in args.set:
+                command.extend(['--set', override])
+            env = dict(os.environ, CUDA_VISIBLE_DEVICES=','.join(map(str, gpus)))
+            return subprocess.run(command, env=env).returncode
         report = OmegaConf.create({
             'validation': {
                 'static': 'passed',
