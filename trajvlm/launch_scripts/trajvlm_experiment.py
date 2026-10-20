@@ -48,6 +48,8 @@ def main(argv=None):
             for override in args.set:
                 command.extend(['--set', override])
             env = dict(os.environ, CUDA_VISIBLE_DEVICES=','.join(map(str, gpus)))
+            # Match scripts/pretrain.sh: reduce allocator fragmentation unless the caller chose otherwise.
+            env.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'expandable_segments:True')
             return subprocess.run(command, env=env).returncode
         report = OmegaConf.create({
             'validation': {
