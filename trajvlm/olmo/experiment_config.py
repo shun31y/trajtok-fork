@@ -107,6 +107,7 @@ PATH_KEYS = {"run.output_dir", "model.segmenter_path", "checkpoint", "data.pixmo
 TRAINER_OVERRIDES = {
     "save_interval", "save_num_checkpoints_to_keep", "max_grad_norm",
     "console_log_interval", "softmax_auxiliary_loss", "softmax_auxiliary_loss_scale",
+    "microbatch_log_interval",
 }
 
 
@@ -370,6 +371,8 @@ def validate_train_config(cfg, recipe, world_size=None):
         raise ValueError('max_grad_norm must be positive and finite')
     if cfg.console_log_interval <= 0 or not math.isfinite(cfg.softmax_auxiliary_loss_scale) or cfg.softmax_auxiliary_loss_scale < 0:
         raise ValueError('console_log_interval must be positive and auxiliary loss scale nonnegative and finite')
+    if cfg.microbatch_log_interval is not None and cfg.microbatch_log_interval <= 0:
+        raise ValueError('microbatch_log_interval must be positive when set')
     if world_size is not None:
         cp = recipe.training.context_parallel_degree
         if world_size <= 0 or world_size % cp:

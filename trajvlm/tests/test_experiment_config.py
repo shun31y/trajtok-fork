@@ -211,7 +211,7 @@ class Experiments(unittest.TestCase):
             ['training.context_parallel_degree=2'], ['data.mixture=molmo2'],
             ['trainer_overrides.save_interval=-1'], ['model.num_traj=0'],
             ['trainer_overrides.max_grad_norm=.nan'], ['model.num_frames=8'],
-            ['trainer_overrides.console_log_interval=0'],
+            ['trainer_overrides.console_log_interval=0'], ['trainer_overrides.microbatch_log_interval=0'],
         ):
             with self.subTest(overrides=overrides), self.assertRaises((ValueError, OmegaConfBaseException)):
                 build_experiment(self.experiment(overrides=overrides))
@@ -281,6 +281,8 @@ class Experiments(unittest.TestCase):
         self.assertIsNone(cfg.data.prefetch_factor)
         self.assertFalse(cfg.data.persistent_workers)
         self.assertEqual(cfg.save_interval, 50)
+        cfg = build_experiment(self.experiment(overrides=['trainer_overrides.microbatch_log_interval=16']))
+        self.assertEqual(cfg.microbatch_log_interval, 16)
 
     def test_manifest_collision_and_resume_provenance(self):
         exp = self.experiment()
