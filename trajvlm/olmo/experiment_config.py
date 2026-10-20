@@ -38,6 +38,9 @@ class Data:
     train_examples: Optional[int] = None
     num_workers: int = 2
     prefetch_factor: int = 4
+    # Training text padding: to_max pads every example to training.seq_len; to_longest pads
+    # to the longest example in each micro-batch (same truncation, less wasted compute).
+    pad: str = 'to_max'
 
 
 @dataclass
@@ -55,6 +58,9 @@ class Training:
     llm_warmup: int = 2000
     compile: bool = False
     context_parallel_degree: int = 1
+    # FSDP parameter/reduction dtypes: float, mixed (bf16 params, fp32 reduce) or
+    # pure (bf16 both). None keeps the stage default.
+    fsdp_precision: Optional[str] = None
 
 
 @dataclass
@@ -107,6 +113,7 @@ PATH_KEYS = {"run.output_dir", "model.segmenter_path", "checkpoint", "data.pixmo
 TRAINER_OVERRIDES = {
     "save_interval", "save_num_checkpoints_to_keep", "max_grad_norm",
     "console_log_interval", "softmax_auxiliary_loss", "softmax_auxiliary_loss_scale",
+    "microbatch_log_interval",
 }
 
 
@@ -215,6 +222,10 @@ def validate_recipe(r):
         raise ValueError(f'Values must be positive: {positive}')
     if r.data.num_workers < 0:
         raise ValueError('data.num_workers must be nonnegative')
+    if r.data.pad not in ('to_max', 'to_longest'):
+        raise ValueError('data.pad must be to_max or to_longest')
+    if t.fsdp_precision not in (None, 'float', 'mixed', 'pure'):
+        raise ValueError('training.fsdp_precision must be float, mixed or pure')
     if t.epochs is not None and r.data.train_examples is None:
         raise ValueError('training.epochs requires data.train_examples')
     for prefix in ('connector', 'vit', 'llm'):
@@ -260,7 +271,7 @@ def build_experiment(experiment):
     from launch_scripts import trajvlm_pretrain as pretrain, trajvlm_sft as sft
     from olmo.data.data_loader import KwargsMixture, WeightedDataset
     from olmo.eval.eval_utils import get_evaluation
-    from olmo.train.trainer_config import WandbConfig
+    from olmo.train.trainer_config import FSDPPrecision, WandbConfig
 
     r = experiment.recipe
     t = r.training
@@ -278,6 +289,9 @@ def build_experiment(experiment):
         cfg.global_train_batch_size = t.global_batch_size
         cfg.device_train_microbatch_size = t.micro_batch_size
         cfg.compile_loss = t.compile
+        if t.fsdp_precision is not None:
+            cfg.fsdp.precision = FSDPPrecision(t.fsdp_precision)
+        cfg.data.pad = r.data.pad
         cfg.data.num_workers = r.data.num_workers
         cfg.data.persistent_workers = r.data.num_workers > 0
         cfg.data.prefetch_factor = r.data.prefetch_factor if r.data.num_workers > 0 else None
@@ -370,6 +384,8 @@ def validate_train_config(cfg, recipe, world_size=None):
         raise ValueError('max_grad_norm must be positive and finite')
     if cfg.console_log_interval <= 0 or not math.isfinite(cfg.softmax_auxiliary_loss_scale) or cfg.softmax_auxiliary_loss_scale < 0:
         raise ValueError('console_log_interval must be positive and auxiliary loss scale nonnegative and finite')
+    if cfg.microbatch_log_interval is not None and cfg.microbatch_log_interval <= 0:
+        raise ValueError('microbatch_log_interval must be positive when set')
     if world_size is not None:
         cp = recipe.training.context_parallel_degree
         if world_size <= 0 or world_size % cp:

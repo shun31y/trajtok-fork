@@ -44,6 +44,9 @@ def _collate(tensors, max_shape=None, dtype=None, pad=None, pad_value=-1, allow_
             if batch_shape[0] > row_shape[0]:
                 raise ValueError()
             assert batch_shape[0] <= row_shape[0]
+    elif pad == "to_longest":
+        # Pad to the longest row in the batch, truncating at the same length as "to_max"
+        row_shape = np.minimum(batch_shape, np.array(max_shape))
     elif pad is None:
         row_shape = batch_shape
     else:
@@ -59,6 +62,13 @@ def _collate(tensors, max_shape=None, dtype=None, pad=None, pad_value=-1, allow_
             slices = tuple(slice(None, dim) for dim in t.shape)
             arr[(ix,) + slices] = t
     return torch.from_numpy(arr)
+
+
+def _split_views(arrays):
+    """Per-example tensors as views of one storage, so DataLoader workers send
+    the whole list through a single shared-memory file descriptor."""
+    lengths = [len(x) for x in arrays]
+    return list(torch.from_numpy(np.concatenate(arrays).astype(np.int64, copy=False)).split(lengths))
 
 
 class MMCollator:
@@ -146,7 +156,8 @@ class MMCollator:
                 if isinstance(spec, VariablePaddingSpec):
                     pad = None
                 else:
-                    pad = self.pad
+                    # "to_longest" only shortens the text sequence; other tensors keep fixed shapes
+                    pad = "to_max" if self.pad == "to_longest" else self.pad
                 pad_value = 0 if spec.dtype == np.uint8 else -1
                 out[key] = _collate([ex.get(key) for ex in batch], spec.shape,
                                     dtype=spec.dtype, pad=pad, pad_value=pad_value, allow_truncate=False)
@@ -154,10 +165,12 @@ class MMCollator:
         out["input_ids"] = out.pop("input_tokens")
 
         if "cum_token_pooling_bounds" in keys:
-            out["cum_token_pooling_bounds"] = [torch.from_numpy(ex.get("cum_token_pooling_bounds", np.array([], dtype=np.int64))) for ex in batch]
+            out["cum_token_pooling_bounds"] = _split_views(
+                [ex.get("cum_token_pooling_bounds", np.array([], dtype=np.int64)) for ex in batch])
 
         if "cum_image_bounds" in keys:
-            out["cum_image_bounds"] = [torch.from_numpy(ex.get("cum_image_bounds", np.array([], dtype=np.int64))) for ex in batch]
+            out["cum_image_bounds"] = _split_views(
+                [ex.get("cum_image_bounds", np.array([], dtype=np.int64)) for ex in batch])
         
         if "image_shard_boundaries" in keys:
             out["image_shard_boundaries"] = [ex.get("image_shard_boundaries", {}) for ex in batch]

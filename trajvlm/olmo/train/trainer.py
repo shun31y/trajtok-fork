@@ -772,6 +772,9 @@ class Trainer:
         assert batch_size_in_tokens > 0
 
         total_loss = torch.tensor(0.0, device=self.device)
+        log_interval = self.cfg.microbatch_log_interval
+        log_progress = log_interval is not None and get_global_rank() == 0
+        start_time = time.monotonic()
         for m_b, micro_batch in enumerate(micro_batches):
             ce_loss, z_loss, model_out = self.model_forward(
                 micro_batch, compute_z_loss=self.cfg.softmax_auxiliary_loss)
@@ -834,6 +837,15 @@ class Trainer:
             # Run backward pass.
             loss.backward()
             total_loss += loss.detach()
+
+            # Timing is approximate: CUDA work is asynchronous, and syncing here would slow training.
+            done = m_b + 1
+            if log_progress and done % log_interval == 0 and done < len(micro_batches):
+                elapsed = time.monotonic() - start_time
+                remaining = elapsed / done * (len(micro_batches) - done)
+                log.info(f"[step={self.global_step}/{self.cfg.stop_at}] micro-batch {done}/{len(micro_batches)} "
+                         f"({100 * done / len(micro_batches):.0f}%), {elapsed / done:.2f}s/micro-batch, "
+                         f"step ETA {timedelta(seconds=int(remaining))}")
 
         return total_loss
 
@@ -1438,7 +1450,7 @@ class Trainer:
         if wandb.run is not None:
             if exit_code != 0:
                 log.info(f"Finishing wandb with exit code {exit_code}")
-            wandb.finish(exit_code=exit_code, quiet=True)
+            wandb.finish(exit_code=exit_code)
         gc_cuda()
         if self._gc_init_state:
             gc.enable()

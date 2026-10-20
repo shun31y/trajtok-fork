@@ -763,6 +763,11 @@ class TrainConfig(BaseConfig):
     How often to log to the console.
     """
 
+    microbatch_log_interval: Optional[int] = None
+    """
+    Log progress within an optimizer step every this many micro-batches (rank 0 only).
+    """
+
     gen1_gc_interval: Optional[int] = 1
     """
     How often (in steps) to run generation 1 garbage collection.

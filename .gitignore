@@ -39,6 +39,8 @@ wandb/
 data/raw/
 data/cache/
 notebooks/scratch_*
+# Crash backtraces written next to the working directory (e.g. by libinfinipath on SIGSEGV)
+*.btr
 
 # Large vendored DINOv3 weights (download separately)
 **/dinov3_convnext_*.pth
