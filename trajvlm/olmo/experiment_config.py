@@ -38,6 +38,9 @@ class Data:
     train_examples: Optional[int] = None
     num_workers: int = 2
     prefetch_factor: int = 4
+    # Training text padding: to_max pads every example to training.seq_len; to_longest pads
+    # to the longest example in each micro-batch (same truncation, less wasted compute).
+    pad: str = 'to_max'
 
 
 @dataclass
@@ -219,6 +222,8 @@ def validate_recipe(r):
         raise ValueError(f'Values must be positive: {positive}')
     if r.data.num_workers < 0:
         raise ValueError('data.num_workers must be nonnegative')
+    if r.data.pad not in ('to_max', 'to_longest'):
+        raise ValueError('data.pad must be to_max or to_longest')
     if t.fsdp_precision not in (None, 'float', 'mixed', 'pure'):
         raise ValueError('training.fsdp_precision must be float, mixed or pure')
     if t.epochs is not None and r.data.train_examples is None:
@@ -286,6 +291,7 @@ def build_experiment(experiment):
         cfg.compile_loss = t.compile
         if t.fsdp_precision is not None:
             cfg.fsdp.precision = FSDPPrecision(t.fsdp_precision)
+        cfg.data.pad = r.data.pad
         cfg.data.num_workers = r.data.num_workers
         cfg.data.persistent_workers = r.data.num_workers > 0
         cfg.data.prefetch_factor = r.data.prefetch_factor if r.data.num_workers > 0 else None

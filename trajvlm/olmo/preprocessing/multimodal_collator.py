@@ -44,6 +44,9 @@ def _collate(tensors, max_shape=None, dtype=None, pad=None, pad_value=-1, allow_
             if batch_shape[0] > row_shape[0]:
                 raise ValueError()
             assert batch_shape[0] <= row_shape[0]
+    elif pad == "to_longest":
+        # Pad to the longest row in the batch, truncating at the same length as "to_max"
+        row_shape = np.minimum(batch_shape, np.array(max_shape))
     elif pad is None:
         row_shape = batch_shape
     else:
@@ -153,7 +156,8 @@ class MMCollator:
                 if isinstance(spec, VariablePaddingSpec):
                     pad = None
                 else:
-                    pad = self.pad
+                    # "to_longest" only shortens the text sequence; other tensors keep fixed shapes
+                    pad = "to_max" if self.pad == "to_longest" else self.pad
                 pad_value = 0 if spec.dtype == np.uint8 else -1
                 out[key] = _collate([ex.get(key) for ex in batch], spec.shape,
                                     dtype=spec.dtype, pad=pad, pad_value=pad_value, allow_truncate=False)
