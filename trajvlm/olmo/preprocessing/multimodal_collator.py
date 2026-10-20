@@ -61,6 +61,13 @@ def _collate(tensors, max_shape=None, dtype=None, pad=None, pad_value=-1, allow_
     return torch.from_numpy(arr)
 
 
+def _split_views(arrays):
+    """Per-example tensors as views of one storage, so DataLoader workers send
+    the whole list through a single shared-memory file descriptor."""
+    lengths = [len(x) for x in arrays]
+    return list(torch.from_numpy(np.concatenate(arrays).astype(np.int64, copy=False)).split(lengths))
+
+
 class MMCollator:
     """Converts list of examples from our datasets into a tensor batch"""
     TEXT_KEYS = ["input_tokens", "target_tokens", "loss_masks", "subsegment_ids", "position_ids"]
@@ -154,10 +161,12 @@ class MMCollator:
         out["input_ids"] = out.pop("input_tokens")
 
         if "cum_token_pooling_bounds" in keys:
-            out["cum_token_pooling_bounds"] = [torch.from_numpy(ex.get("cum_token_pooling_bounds", np.array([], dtype=np.int64))) for ex in batch]
+            out["cum_token_pooling_bounds"] = _split_views(
+                [ex.get("cum_token_pooling_bounds", np.array([], dtype=np.int64)) for ex in batch])
 
         if "cum_image_bounds" in keys:
-            out["cum_image_bounds"] = [torch.from_numpy(ex.get("cum_image_bounds", np.array([], dtype=np.int64))) for ex in batch]
+            out["cum_image_bounds"] = _split_views(
+                [ex.get("cum_image_bounds", np.array([], dtype=np.int64)) for ex in batch])
         
         if "image_shard_boundaries" in keys:
             out["image_shard_boundaries"] = [ex.get("image_shard_boundaries", {}) for ex in batch]
