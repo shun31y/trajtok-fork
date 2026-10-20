@@ -1,0 +1,22 @@
+# Debug variant of the global batch 4096 run: one optimizer step, then
+# loss validation and the final checkpoint save at step 1. Global batch 128
+# keeps the step short; scale the measured step time to estimate 4096.
+extends: [stage1_pixmo_cap_100k_qwen25_7b_lora_gb4096.yaml]
+
+run:
+  name: stage1_pixmo_cap_100k_qwen25_7b_lora_gb4096_debug
+  output_dir: /home/shun/workspace/trajtok-fork/trajvlm/results/stage1_pixmo_cap_100k_qwen25_7b_lora_gb4096_debug
+
+training:
+  max_steps: 1
+  epochs: null
+  global_batch_size: 128
+
+evaluation:
+  interval: 1
+  max_examples: 32  # Per loss task; enough to exercise the validation path.
+
+trainer_overrides:
+  save_interval: 1
+  save_num_checkpoints_to_keep: 1
+  console_log_interval: 1

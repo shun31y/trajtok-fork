@@ -211,7 +211,8 @@ class Experiments(unittest.TestCase):
             ['training.context_parallel_degree=2'], ['data.mixture=molmo2'],
             ['trainer_overrides.save_interval=-1'], ['model.num_traj=0'],
             ['trainer_overrides.max_grad_norm=.nan'], ['model.num_frames=8'],
-            ['trainer_overrides.console_log_interval=0'], ['trainer_overrides.microbatch_log_interval=0'],
+            ['trainer_overrides.console_log_interval=0'], ['training.fsdp_precision=bf16'],
+            ['trainer_overrides.microbatch_log_interval=0'], ['data.pad=longest'],
         ):
             with self.subTest(overrides=overrides), self.assertRaises((ValueError, OmegaConfBaseException)):
                 build_experiment(self.experiment(overrides=overrides))
@@ -283,6 +284,21 @@ class Experiments(unittest.TestCase):
         self.assertEqual(cfg.save_interval, 50)
         cfg = build_experiment(self.experiment(overrides=['trainer_overrides.microbatch_log_interval=16']))
         self.assertEqual(cfg.microbatch_log_interval, 16)
+
+    def test_fsdp_precision_and_micro_batch(self):
+        cfg = build_experiment(self.experiment())
+        self.assertEqual(cfg.fsdp.precision, 'float')
+        cfg = build_experiment(self.experiment(overrides=['training.fsdp_precision=mixed',
+                                                          'training.micro_batch_size=4']))
+        self.assertEqual(cfg.fsdp.precision, 'mixed')
+        self.assertEqual(cfg.device_train_microbatch_size, 4)
+
+    def test_training_pad_mode(self):
+        cfg = build_experiment(self.experiment())
+        self.assertEqual(cfg.data.pad, 'to_max')
+        cfg = build_experiment(self.experiment(overrides=['data.pad=to_longest']))
+        self.assertEqual(cfg.data.pad, 'to_longest')
+        self.assertTrue(all(ev.data.pad == 'to_max' for ev in cfg.evaluators))
 
     def test_manifest_collision_and_resume_provenance(self):
         exp = self.experiment()

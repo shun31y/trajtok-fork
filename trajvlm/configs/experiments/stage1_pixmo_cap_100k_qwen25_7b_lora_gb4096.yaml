@@ -1,0 +1,37 @@
+# Global batch 4096 variant of the existing 100k-image Qwen2.5 LoRA experiment.
+# Keep the original run and its checkpoints separate.
+extends: [stage1_pixmo_cap_100k_qwen25_7b_lora.yaml]
+
+run:
+  name: stage1_pixmo_cap_100k_qwen25_7b_lora_gb4096
+  # Checkpoints are ~32GB each; keep them on the SSD rather than the nearly full root disk.
+  output_dir: /mnt/ssd1/shun/VideoUnderstanding/experiments/trajvlm/stage1_pixmo_cap_100k_qwen25_7b_lora_gb4096
+
+data:
+  # Each prefetched batch holds 2048 float32 images per GPU at this global batch.
+  prefetch_factor: 1
+  # Pad text to the longest example per micro-batch instead of seq_len (~2.1x faster;
+  # results/speed_benchmark_20261020).
+  pad: to_longest
+
+training:
+  max_steps: null
+  epochs: 4  # 4 * ceil(100000 / 4096) = 100 optimizer steps
+  global_batch_size: 4096
+  # micro 4 + mixed was ~3x faster than micro 1 + float on 2x RTX 6000 Ada
+  # (results/speed_benchmark_20261020).
+  micro_batch_size: 4
+  fsdp_precision: mixed
+  # Preserve approximately the same number of examples during warmup.
+  connector_warmup: 10  # 10 * 4096 = 40960; original 200 * 192 = 38400
+  vit_warmup: 94        # 94 * 4096 = 385024; original 2000 * 192 = 384000
+  llm_warmup: 94
+
+evaluation:
+  interval: 5  # Once per nominal epoch: ceil(100000 / 4096)
+
+trainer_overrides:
+  save_interval: 25
+  console_log_interval: 1
+  # 512 micro-batches per GPU per step at micro 4; log roughly every 7 minutes.
+  microbatch_log_interval: 64
