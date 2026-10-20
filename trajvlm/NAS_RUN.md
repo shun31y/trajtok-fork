@@ -37,20 +37,27 @@ export WANDB_PROJECT=trajvlm
 export WANDB_ENTITY=YOUR_WANDB_USER_OR_TEAM
 wandb login
 
+NAS_SET=(
+  --set run.name=stage1_pixmo_cap_100k_qwen25_7b_lora_nas
+  --set run.output_dir=../../results/stage1_pixmo_cap_100k_qwen25_7b_lora_nas
+  --set "data.pixmo_cap_path=$MOLMO_DATA_DIR/torch_datasets/pixmo_datasets_100k/cap_with_validation"
+)
+
 python trajvlm/launch_scripts/trajvlm_experiment.py \
-  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora_nas.yaml \
-  --print-config
+  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml \
+  "${NAS_SET[@]}" --print-config
 
 mkdir -p trajvlm/logs
 set -o pipefail
 python trajvlm/launch_scripts/trajvlm_experiment.py \
-  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora_nas.yaml \
-  --launch 2>&1 | tee "trajvlm/logs/pretrain_nas_$(date +%Y%m%d_%H%M%S).log"
+  --config trajvlm/configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml \
+  "${NAS_SET[@]}" --launch 2>&1 | tee "trajvlm/logs/pretrain_nas_$(date +%Y%m%d_%H%M%S).log"
 ```
 
-The NAS recipe inherits GPU selection and all training/evaluation settings
-from the SSD recipe. Override GPU selection with `--set 'launch.gpus=[0,1]'`
-if needed. Results are written to the new server's local
+`NAS_SET` points the SSD recipe at the NAS dataset and a separate run name and
+output directory; GPU selection and all training/evaluation settings are
+inherited from the SSD recipe. Override GPU selection with
+`--set 'launch.gpus=[0,1]'` if needed. Results are written to the new server's local
 `trajvlm/results/stage1_pixmo_cap_100k_qwen25_7b_lora_nas/`; the initial model
 weights on NAS are never overwritten by training. There were no saved trained
 checkpoints at transfer time.
@@ -67,6 +74,7 @@ python trajvlm/scripts/relocate_pixmo_dataset.py \
   --validation-images "$MOLMO_DATA_DIR/pixmo_images_eval2k"
 ```
 
-Then add `--set data.pixmo_cap_path=/tmp/trajvlm-pixmo-cap` when launching.
+Then add `--set data.pixmo_cap_path=/tmp/trajvlm-pixmo-cap` after
+`"${NAS_SET[@]}"` when launching; the later value wins.
 The relocation tool refuses existing outputs. A working NVIDIA driver and
 the host libraries described in `UV_SETUP.md` are required on the new server.
