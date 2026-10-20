@@ -73,19 +73,19 @@ class Experiments(unittest.TestCase):
     def test_100k_qwen25_lora_pretrain(self):
         path = ROOT / 'configs/experiments/stage1_pixmo_cap_100k_qwen25_7b_lora.yaml'
         cfg = build_experiment(load_experiment(path))
-        self.assertEqual(cfg.max_duration, 3128)
-        self.assertEqual(cfg.stop_at, 3128)
+        self.assertEqual(cfg.max_duration, 2084)
+        self.assertEqual(cfg.stop_at, 2084)
         self.assertTrue(cfg.ft_connector)
         self.assertTrue(cfg.ft_llm)
         self.assertFalse(cfg.ft_vit)
         self.assertEqual(cfg.model.llm.lora.rank, 16)
         self.assertEqual(cfg.model.llm.lora.target_modules, ['att_proj', 'attn_out'])
-        self.assertEqual(cfg.save_interval, 782)
+        self.assertEqual(cfg.save_interval, 521)
         self.assertEqual(cfg.device_train_microbatch_size, 1)
         self.assertIsNotNone(cfg.wandb)
         self.assertEqual(cfg.wandb.project, 'test-project')
         self.assertEqual(cfg.wandb.entity, 'test-entity')
-        self.assertEqual(cfg.eval_interval, 782)
+        self.assertEqual(cfg.eval_interval, 521)
         self.assertEqual(len(cfg.evaluators), 2)
         self.assertEqual({ev.data.dataset for ev in cfg.evaluators},
                          {'pixmo_cap', 'pixmo_cap_with_transcripts'})

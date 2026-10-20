@@ -3,23 +3,23 @@
 # train_examples controls the step budget, not dataset filtering.
 extends: [stage1_pixmo_cap_qwen25_7b.yaml]
 launch:
-  gpus: [0]
+  gpus: [0,1]
 run:
   name: stage1_pixmo_cap_100k_qwen25_7b_lora
   output_dir: ../../results/stage1_pixmo_cap_100k_qwen25_7b_lora
 data:
-  pixmo_cap_path: /mnt/ssd2/shun/VideoUnderstanding/trajtok/torch_datasets/pixmo_datasets_100k/cap_with_validation
+  pixmo_cap_path: /mnt/ssd1/shun/VideoUnderstanding/datasets/pixmo_datasets_100k/cap_with_validation
   train_examples: 100000
 evaluation:
   enabled: true
   tasks: []
   loss_tasks: [pixmo_cap, pixmo_cap_with_transcripts]
-  interval: 782
+  interval: 521
   max_examples: 2000
 training:
   max_steps: null
-  epochs: 4  # 4 * ceil(100000 / 128) = 3128 optimizer steps
-  global_batch_size: 128
+  epochs: 4  # 4 * ceil(100000 / 192) = 2084 optimizer steps
+  global_batch_size: 192
   micro_batch_size: 1
 peft:
   mode: connector_lora
@@ -29,7 +29,7 @@ peft:
     dropout: 0.0
     target_modules: [att_proj, attn_out]
 trainer_overrides:
-  save_interval: 782
+  save_interval: 521
   save_num_checkpoints_to_keep: 4
 tracking:
   enabled: true
