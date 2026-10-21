@@ -14,7 +14,7 @@ from olmo.data.academic_video_datasets import (
     CameraBenchTrain, CLEVRER, FunQA, How2QA, IntentQA, \
     SocialIQ2, SUTDTrafficQA, STAR, SportsQA, RoadTextVQA, \
     VideoLocalizedNarratives, VideoLocalizedNarrativesCaptionHf, CinepileHf, NewsVideoQA, Countix,
-    Paxion, TGIF,
+    Paxion, SSv2QA, TGIF,
     TVQA, NeXTQA, CharadesSTA
 )
 from olmo.data.academic_video_track_datasets import (
@@ -364,6 +364,8 @@ def get_dataset_by_name(dataset_name, split) -> Dataset:
         return SocialIQ2(split=split)
     if dataset_name == "sutd_trafficqa":
         return SUTDTrafficQA(split=split)
+    if dataset_name == "ssv2_qa":
+        return SSv2QA(split=split)
     if dataset_name == "star":
         return STAR(split=split, max_per_video=10)
     if dataset_name == "star_mc":
