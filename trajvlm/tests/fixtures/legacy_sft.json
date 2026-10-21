@@ -170,8 +170,8 @@
       "max_text_tokens": null,
       "loss_token_weighting": "root_subsegments_root_tokens",
       "video": {
-        "max_frames": 8,
-        "frame_sample_mode": "fps",
+        "max_frames": 128,
+        "frame_sample_mode": "uniform_last_frame",
         "candidate_sampling_fps": [
           0.25,
           0.5,
@@ -430,6 +430,13 @@
             "dataset_name": "motionbench_train",
             "sampling_rate": null,
             "root_size_factor": null,
+            "message_weight": null,
+            "override_p_high_res": null
+          },
+          {
+            "dataset_name": "ssv2_qa",
+            "sampling_rate": null,
+            "root_size_factor": 60000.0,
             "message_weight": null,
             "override_p_high_res": null
           },

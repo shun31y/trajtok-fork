@@ -95,7 +95,10 @@ def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int, conf
     # PixMoCap is image-only; SFT needs the full video spec. Take the pretrain
     # video preproc (already a TrajVitVideoConfig with the correct
     # image_res/num_traj/normalize_on_gpu copied from the backbone at pretrain
-    # time) and override only num_frames + frames_per_clip.
+    # time) and override only the frame sampling. The video loader decodes at
+    # most `max_frames` (8 in the pretrain config) and the TrajViT preprocessor
+    # pads shorter inputs with the last frame, so `max_frames` must follow
+    # `num_frames`; frames are sampled uniformly as in the paper.
     if not isinstance(model_cfg.mm_preprocessor.video, TrajVitVideoConfig):
         raise NotImplementedError(
             f"expected mm_preprocessor.video to be TrajVitVideoConfig, got "
@@ -105,6 +108,8 @@ def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int, conf
         model_cfg.mm_preprocessor.video,
         num_frames=num_frames,
         frames_per_clip=frames_per_clip,
+        max_frames=num_frames,
+        frame_sample_mode="uniform_last_frame",
     )
 
     model_cfg = TrajVlmConfig(
