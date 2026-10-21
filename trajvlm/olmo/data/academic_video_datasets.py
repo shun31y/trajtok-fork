@@ -4253,39 +4253,35 @@ class FunQA(DatasetBase):
     HF_REPO = "fesvhtr/FunQA"
 
     @classmethod
-    def download(cls, n_procs=None):
+    def download(cls, n_procs=None, splits=("train",)):
+        from olmo.data.llava_video_archive import extract_zip_archive
+
         os.makedirs(cls.HOME, exist_ok=True)
-        # Download all JSON annotation files
-        for fname in ["FunQA_train.json", "FunQA_val.json", "FunQA_test.json", "Funqa_mcqa_v1.json"]:
-            if not exists(join(cls.HOME, fname)):
+        # The current Hugging Face release keeps the original files under raw/.
+        for fname in [*(f"FunQA_{split}.json" for split in splits), "Funqa_mcqa_v1.json"]:
+            if not exists(join(cls.HOME, "raw", fname)):
                 hf_hub_download(
                     repo_id=cls.HF_REPO,
                     repo_type="dataset",
-                    filename=fname,
+                    filename=f"raw/{fname}",
                     local_dir=cls.HOME,
                     token=os.environ.get("HF_TOKEN"),
                 )
-        # Download and extract video zips per split
-        for split in ["train", "val", "test"]:
-            video_dir = join(cls.HOME, split)
-            zip_name = f"{split}.zip"
-            if not exists(video_dir) or not os.listdir(video_dir):
-                zip_path = join(cls.HOME, zip_name)
-                if not exists(zip_path):
-                    hf_hub_download(
-                        repo_id=cls.HF_REPO,
-                        repo_type="dataset",
-                        filename=zip_name,
-                        local_dir=cls.HOME,
-                        token=os.environ.get("HF_TOKEN"),
-                    )
-                log.info(f"Extracting {zip_path} to {cls.HOME}...")
-                with zipfile.ZipFile(zip_path, 'r') as zf:
-                    zf.extractall(cls.HOME)
+        for split in splits:
+            zip_path = join(cls.HOME, "raw", f"{split}.zip")
+            if not exists(zip_path):
+                hf_hub_download(
+                    repo_id=cls.HF_REPO,
+                    repo_type="dataset",
+                    filename=f"raw/{split}.zip",
+                    local_dir=cls.HOME,
+                    token=os.environ.get("HF_TOKEN"),
+                )
+            extract_zip_archive(Path(zip_path), Path(cls.HOME))
 
     def __init__(self, split):
         assert split in ["train", "val", "test"], f"Invalid split: {split}"
-        self.download()
+        self.download(splits=(split,))
         super().__init__(split)
 
     @staticmethod
@@ -4298,8 +4294,8 @@ class FunQA(DatasetBase):
 
     def load(self):
         video_path = join(self.HOME, self.split)
-        oe_json_path = join(self.HOME, f"FunQA_{self.split}.json")
-        mc_json_path = join(self.HOME, "Funqa_mcqa_v1.json")
+        oe_json_path = join(self.HOME, "raw", f"FunQA_{self.split}.json")
+        mc_json_path = join(self.HOME, "raw", "Funqa_mcqa_v1.json")
 
         with open(resource_path(oe_json_path)) as f:
             oe_data = json.load(f)
@@ -5413,6 +5409,40 @@ class Countix(DatasetBase):
                     style="video_multiple_choice",
                 )
             data_list.append(dict(video=video_path, message_list=[msg]))
+        return data_list
+
+    def get(self, item, rng):
+        return self.data[item]
+
+
+class SSv2QA(DatasetBase):
+    """SSv2-QA — GPT-4o rephrasings of Something-Something V2 train labels into MC / short-answer QA.
+
+    Reads `ssv2_qa_train.jsonl`: one QA per video, each row holding an absolute `video` path, `style`,
+    `question`, and either `answer` or `options` + `answer_idx`.
+    """
+    HOME = join(VIDEO_DATA_HOME, "sth-sth-v2")
+    QA_PATH = join(HOME, "ssv2_qa_train.jsonl")
+
+    def __init__(self, split):
+        assert split == "train", f"Invalid split: {split}"
+        if not exists(self.QA_PATH):
+            raise FileNotFoundError(
+                f"SSv2-QA annotations not found at {self.QA_PATH}"
+            )
+        super().__init__(split)
+
+    def load(self):
+        data_list = []
+        with open(self.QA_PATH) as source:
+            for line in source:
+                row = json.loads(line)
+                if row["style"] == "video_multiple_choice":
+                    msg = dict(question=row["question"], options=row["options"],
+                               answer_idx=row["answer_idx"], style=row["style"])
+                else:
+                    msg = dict(question=row["question"], answer=row["answer"], style=row["style"])
+                data_list.append(dict(video=row["video"], message_list=[msg]))
         return data_list
 
     def get(self, item, rng):

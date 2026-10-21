@@ -124,8 +124,9 @@ class Experiments(unittest.TestCase):
         self.assertIsInstance(cfg.model, TrajVlmConfig)
         group, = cfg.data.kwargs_mixture
         self.assertEqual([d.dataset_name for d in group.datasets], ['tgif', 'nextqa_mc'])
-        self.assertEqual(cfg.model.mm_preprocessor.video.num_frames, 64)
-        self.assertEqual(cfg.model.mm_preprocessor.video.frames_per_clip, 8)
+        self.assertEqual(cfg.model.mm_preprocessor.video.num_frames, 128)
+        self.assertEqual(cfg.model.mm_preprocessor.video.frames_per_clip, 16)
+        self.assertEqual(cfg.model.mm_preprocessor.video.max_frames, 128)
         self.assertEqual(cfg.evaluators, [])
         self.assertEqual(cfg.inf_evaluators, [])
         self.assertIsNone(cfg.wandb)
@@ -133,7 +134,7 @@ class Experiments(unittest.TestCase):
 
     def test_complete_video_mixture_matches_authoritative_names(self):
         from launch_scripts.sft import VIDEO_ACADEMIC_DATASETS
-        cfg = build_experiment(self.experiment(2))
+        cfg = build_experiment(self.experiment(2, ['data.datasets=null']))
         self.assertEqual([d.dataset_name for d in cfg.data.kwargs_mixture[0].datasets],
                          [d[0] if isinstance(d, tuple) else d for d in VIDEO_ACADEMIC_DATASETS])
 
@@ -392,10 +393,12 @@ class Experiments(unittest.TestCase):
             if key == 'model':
                 actual['llm'].pop('lora', None)
             self.assertEqual(actual, serial(legacy)[key], key)
-        exp = self.experiment(2)
+        # The legacy entrypoint hardcodes 300k steps at global batch 128 and a 16k sequence.
+        exp = self.experiment(2, ['training.max_steps=300000', 'training.global_batch_size=128',
+                                  'training.seq_len=16384'])
         cfg = build_experiment(exp)
         args = sft.make_parser().parse_args([str(FIXTURES / 'pretrain_checkpoint'), 'molmo2',
-                                             '--num_frames=64', '--frames_per_clip=8',
+                                             '--num_frames=128', '--frames_per_clip=16',
                                              '--device_batch_size=1', '--no_compile'])
         legacy = sft.build_train_config(args, ['--save_folder=/tmp/legacy-sft'], checkpoint_selector=lambda p:p)
         for key in ('model', 'optimizer', 'scheduler', 'max_duration', 'stop_at', 'global_train_batch_size'):

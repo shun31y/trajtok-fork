@@ -23,3 +23,8 @@ init paths are deliberately nonexistent. Do not use it as a training checkpoint.
 
 The existing sampler/shape variable-length tuple annotations were corrected
 before capture so OmegaConf 2.4 can serialize the unchanged configuration values.
+
+`legacy_sft.json` was later updated by hand for two intended behaviour changes:
+the SFT video preprocessor now samples `max_frames = num_frames` frames with
+`uniform_last_frame` (previously the pretrain value of 8 frames at `fps`), and
+`ssv2_qa` was enabled in `VIDEO_ACADEMIC_DATASETS`.

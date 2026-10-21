@@ -102,7 +102,7 @@ VIDEO_ACADEMIC_DATASETS = [
     "motionbench_train",
 
     # academic other
-    # ("ssv2_qa", 60_000),
+    ("ssv2_qa", 60_000),
     ("moments_in_time_qa", 60_000),
     ("kinetics_qa", 60_000),
     "charades_sta_all_qa",

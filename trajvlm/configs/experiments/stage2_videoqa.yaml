@@ -4,3 +4,30 @@ run:
   output_dir: ../../results/stage2_videoqa
 # Select an exact checkpoint directory containing config.yaml (not a run root).
 checkpoint: ../../results/stage1_pixmo_cap/step22347
+# TrajTok paper (arXiv:2602.22779) Table 9: 128 frames, 10k steps, global batch 32, seq len 8192.
+# 10k x 32 = 320k examples drawn from the VideoQA mixture with the existing root-size sampling rates.
+model:
+  num_frames: 128
+  frames_per_clip: 16
+data:
+  # VideoQA datasets collectable without per-URL scraping or manual licence requests.
+  datasets:
+    - tgif
+    - sportsqa_oe
+    - star
+    - clevrer
+    - sutd_trafficqa
+    - funqa
+    - nextqa_mc
+    - ssv2_qa
+    - charades_sta_all_qa
+    - intent_qa
+    - llava_video_mc_academic
+    - llava_video_oe_academic
+training:
+  max_steps: 10000
+  global_batch_size: 32
+  # The paper used 4 per A100 (80GB) x 8 GPUs; 1 keeps 128 frames within memory here, and the
+  # global batch of 32 is reached by gradient accumulation.
+  micro_batch_size: 1
+  seq_len: 8192
