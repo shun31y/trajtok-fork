@@ -14,7 +14,7 @@ import wandb
 from tqdm import tqdm
 
 from .evaluators import (
-    HtmlTable, CountEval, PointCountEval, ClockEval, VqaEval,
+    HtmlTable, ImageTable, CountEval, PointCountEval, ClockEval, VqaEval,
     SavePredictions, MathVistaEval, PointingEval,
     TempCompassEval, VideoMMEEval, MLVUGenEval, LongVideoBenchEval, LongVideoBenchCaptionEval,
     VinogroundEval, VixMoCaptionEval, QVHighlightsEval,
@@ -76,6 +76,16 @@ class InfEvaluator:
                     resolved_metrics[k] = wandb.Html(HtmlTable(all_rows).get_html())
                 else:
                     dist.gather_object(v, None)
+            elif isinstance(v, ImageTable):
+                if get_global_rank() == 0:
+                    all_predictions = [None]*get_world_size()
+                    dist.gather_object(v, all_predictions)
+                    rows = flatten_list([x.rows for x in all_predictions])
+                    resolved_metrics[k] = wandb.Table(columns=list(ImageTable.COLUMNS), data=[
+                        [None if r["image"] is None else wandb.Image(r["image"]),
+                         r["prompt"], r["prediction"], r["gt"]] for r in rows])
+                else:
+                    dist.gather_object(v, None)
             elif isinstance(v, List):
                 if get_global_rank() == 0:
                     all_predictions = [None]*get_world_size()
@@ -86,7 +96,7 @@ class InfEvaluator:
                 else:
                     dist.gather_object(v, None)
             else:
-                raise ValueError(f"Metric {v} not understood, must be aggregated between devices and of type float|List|HtmlTable|torchmetrics.Metric")
+                raise ValueError(f"Metric {v} not understood, must be aggregated between devices and of type float|List|HtmlTable|ImageTable|torchmetrics.Metric")
 
         # Some metrics need to some kind of more complex aggregation that cannot be done on the
         # individual worker, we hack those special cases in here
