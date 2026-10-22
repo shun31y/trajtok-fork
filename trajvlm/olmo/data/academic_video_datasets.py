@@ -4270,6 +4270,9 @@ class FunQA(DatasetBase):
         for split in splits:
             zip_path = join(cls.HOME, "raw", f"{split}.zip")
             if not exists(zip_path):
+                video_dir = join(cls.HOME, split)
+                if exists(video_dir) and os.listdir(video_dir):
+                    continue  # Already extracted; offline bundles ship without the archive.
                 hf_hub_download(
                     repo_id=cls.HF_REPO,
                     repo_type="dataset",
@@ -5418,8 +5421,8 @@ class Countix(DatasetBase):
 class SSv2QA(DatasetBase):
     """SSv2-QA — GPT-4o rephrasings of Something-Something V2 train labels into MC / short-answer QA.
 
-    Reads `ssv2_qa_train.jsonl`: one QA per video, each row holding an absolute `video` path, `style`,
-    `question`, and either `answer` or `options` + `answer_idx`.
+    Reads `ssv2_qa_train.jsonl`: one QA per video, each row holding a `video` path (absolute, or relative
+    to `HOME`), `style`, `question`, and either `answer` or `options` + `answer_idx`.
     """
     HOME = join(VIDEO_DATA_HOME, "sth-sth-v2")
     QA_PATH = join(HOME, "ssv2_qa_train.jsonl")
@@ -5442,7 +5445,7 @@ class SSv2QA(DatasetBase):
                                answer_idx=row["answer_idx"], style=row["style"])
                 else:
                     msg = dict(question=row["question"], answer=row["answer"], style=row["style"])
-                data_list.append(dict(video=row["video"], message_list=[msg]))
+                data_list.append(dict(video=join(self.HOME, row["video"]), message_list=[msg]))
         return data_list
 
     def get(self, item, rng):
