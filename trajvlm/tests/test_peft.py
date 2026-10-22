@@ -92,7 +92,8 @@ class PeftTests(unittest.TestCase):
         model = TinyModel(lora if mode == 'connector_lora' else None)
         selected = apply_peft_policy(model, PeftConfig(mode, lora))
         expected = {name for name, _ in model.named_parameters()
-                    if name.startswith(('vision_backbone.cross_attn.', 'vision_backbone.image_projector.'))
+                    if name.startswith(('vision_backbone.query_proj.', 'vision_backbone.cross_attn.',
+                                        'vision_backbone.image_projector.'))
                     or (mode == 'connector_lora' and is_lora_key(name))}
         self.assertEqual(set(selected), expected)
         groups = OptimizerConfig().get_param_groups(1, None, model)
@@ -111,7 +112,7 @@ class PeftTests(unittest.TestCase):
         for name, p in model.named_parameters():
             if name not in expected:
                 self.assertTrue(torch.equal(before[name], p), name)
-        for scope in ('vision_backbone.cross_attn.', 'vision_backbone.image_projector.'):
+        for scope in ('vision_backbone.query_proj.', 'vision_backbone.cross_attn.', 'vision_backbone.image_projector.'):
             self.assertTrue(any(not torch.equal(before[n], p) for n, p in model.named_parameters() if n.startswith(scope)))
         if mode == 'connector_lora':
             self.assertTrue(any(not torch.equal(before[n], p) for n, p in model.named_parameters() if is_lora_key(n)))

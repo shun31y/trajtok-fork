@@ -106,7 +106,7 @@ def apply_peft_policy(model, config):
         raise ValueError('PEFT connector policy requires the SigLip2 TrajVLM backbone')
     for parameter in model.parameters():
         parameter.requires_grad_(False)
-    for module in (backbone.cross_attn, backbone.image_projector):
+    for module in (backbone.query_proj, backbone.cross_attn, backbone.image_projector):
         for parameter in module.parameters():
             parameter.requires_grad_(True)
     adapters = [(name, parameter) for name, parameter in model.transformer.named_parameters() if is_lora_key(name)]
