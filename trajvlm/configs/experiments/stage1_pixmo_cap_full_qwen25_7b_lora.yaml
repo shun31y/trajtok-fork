@@ -1,0 +1,78 @@
+# Full PixMoCap Stage1 with Qwen2.5-7B-Instruct + connector LoRA. Standalone recipe:
+# the 100k recipes are debug-only, so nothing is inherited from them.
+# Optimization follows the fork's trajvlm_pretrain.py (global batch 128, LRs,
+# 200/2000/2000-step warmup) for one epoch as in the TrajTok paper; only throughput
+# settings differ.
+# Source stage1_pixmo_cap_full.env.sh before inspection/training.
+schema_version: 1
+stage: pretrain
+
+launch:
+  gpus: [0,1]
+
+run:
+  name: stage1_pixmo_cap_full_qwen25_7b_lora
+  output_dir: /data/trajtok/runs/stage1_pixmo_cap_full_qwen25_7b_lora
+model:
+  llm: qwen2.5_7b_instruct
+  segmenter_path: ${oc.env:MOLMO_DATA_DIR}/checkpoints/segmenter_filteredmixdata_all.pth
+  num_traj: 128
+  image_res: 378
+
+data:
+  mixture: pixmo_cap
+  # Relocated copy of /data-premium/PixMoCap/torch_datasets/pixmo_datasets/cap;
+  # the original records point at /mnt/ssd2 image paths.
+  pixmo_cap_path: /data-premium/PixMoCap/torch_datasets/pixmo_datasets/cap_data_premium
+  train_examples: 706022
+  # Decode + resize costs ~61 ms/image on CPU, so 2 workers cap supply at ~33 images/s per GPU.
+  num_workers: 12
+  # Pad text to the longest example per micro-batch instead of seq_len
+  # (same truncation, less wasted compute).
+  pad: to_longest
+
+training:
+  max_steps: null
+  epochs: 1  # ceil(706022 / 128) = 5516 optimizer steps
+  global_batch_size: 128
+  # GPU utilization is set by the micro batch; global batch only sets how often the
+  # optimizer steps. 64 examples per GPU per step, so this must divide 64.
+  # On 2x H100 NVL, 16 and 32 both ran at ~19.5 s/step (~4.5k tokens/s/GPU, 100% util);
+  # 16 peaks at ~57GB per GPU.
+  micro_batch_size: 16
+  fsdp_precision: mixed
+  seq_len: 2536
+  connector_learning_rate: 2e-4
+  vit_learning_rate: 6e-6
+  llm_learning_rate: 2e-5
+  connector_warmup: 200
+  vit_warmup: 2000
+  llm_warmup: 2000
+  compile: false
+
+# Besides the validation loss, captions three fixed validation images and logs them with the
+# image and reference caption to wandb.
+evaluation:
+  enabled: true
+  tasks: [pixmo_cap_qualitative]
+  loss_tasks: [pixmo_cap, pixmo_cap_with_transcripts]
+  interval: 500  # As in trajvlm_pretrain.py
+  max_examples: 2000
+
+peft:
+  mode: connector_lora
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.0
+    target_modules: [att_proj, attn_out]
+
+trainer_overrides:
+  save_interval: 1000
+  # Checkpoints are ~32GB each; the root disk has ~150GB free.
+  save_num_checkpoints_to_keep: 2
+
+tracking:
+  enabled: true
+  project: ${oc.env:WANDB_PROJECT}
+  entity: ${oc.env:WANDB_ENTITY}
