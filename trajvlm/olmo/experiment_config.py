@@ -311,6 +311,11 @@ def build_experiment(experiment):
                     ev.data.seed = r.run.seed
                     ev.data.persistent_workers = r.data.num_workers > 0
                     ev.data.prefetch_factor = r.data.prefetch_factor if r.data.num_workers > 0 else None
+                    if inference:
+                        # As in the SFT launchers: generation batches are unpadded and only the
+                        # question text needs to fit.
+                        ev.data.pad = None
+                        ev.data.max_text_seq_len = 128
                     (cfg.inf_evaluators if inference else cfg.evaluators).append(ev)
             cfg.eval_interval = r.evaluation.interval if cfg.evaluators else -1
             cfg.inf_eval_interval = r.evaluation.interval if cfg.inf_evaluators else -1
@@ -369,6 +374,9 @@ def validate_train_config(cfg, recipe, world_size=None):
             raise ValueError('model.num_traj and preprocessing trajectory counts disagree')
         if pre.image_res != cfg.model.vision_backbone.vit.image_default_input_size[0]:
             raise ValueError('model.image_res must match the SigLIP2 input resolution')
+    video = cfg.model.mm_preprocessor.video
+    if video.frames_per_clip > 1 and vis.frames_per_pool != video.frames_per_clip:
+        raise ValueError('vision backbone frames_per_pool must equal video frames_per_clip')
     if recipe.model.num_traj is not None and vis.num_traj != recipe.model.num_traj:
         raise ValueError('model.num_traj disagrees with inherited checkpoint')
     if recipe.model.image_res is not None and cfg.model.mm_preprocessor.image.image_res != recipe.model.image_res:
