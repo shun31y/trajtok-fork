@@ -16,6 +16,7 @@ import wandb
 from beaker import Beaker
 from omegaconf import OmegaConf
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.tensor import DTensor
 from wandb.sdk.wandb_run import Run
 
 from olmo.exceptions import OLMoCliError, OLMoConfigurationError
@@ -407,6 +408,15 @@ def run_trainer(cfg: TrainConfig) -> None:
         for name, param in fsdp_model.named_parameters():
             if not torch.all(torch.isfinite(param)):
                 raise ValueError(name)
+
+        # An all-zero connector never receives gradients, so training would silently ignore vision.
+        vision_backbone = getattr(fsdp_model, "vision_backbone", None)
+        if vision_backbone is not None and hasattr(vision_backbone, "get_connector_parameters"):
+            connector = [p for p in vision_backbone.get_connector_parameters() if p.requires_grad]
+            if connector and not any(
+                torch.any(p.full_tensor() if isinstance(p, DTensor) else p).item() for p in connector
+            ):
+                raise ValueError("Trainable vision connector parameters are all zero")
 
         # Ready to start training
         if not cfg.dry_run:

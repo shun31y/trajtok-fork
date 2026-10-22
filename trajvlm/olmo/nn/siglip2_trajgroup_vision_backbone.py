@@ -68,7 +68,7 @@ from olmo.nn.trajvit_dinov3 import DINOResNetHierFeat as _MetaSafeDINOResNet
 _seg_backbone.DINOResNetHierFeat = _MetaSafeDINOResNet
 
 from trajtok_segmenter.model.segmenter import SimpleSegmenter
-from trajtok_segmenter.model.traj_perceiver import TrajPerceiver
+from trajtok_segmenter.model.traj_perceiver import RotaryEmbedding3D, TrajPerceiver, _build_freqs
 
 
 log = logging.getLogger(__name__)
@@ -145,9 +145,9 @@ class _ProjectorMLP(nn.Module):
         self.w2 = nn.Linear(hidden, d_model, bias=False)
 
     def reset_parameters(self):
-        nn.init.trunc_normal_(self.w1.weight, std=0.02)
-        nn.init.trunc_normal_(self.w_gate.weight, std=0.02)
-        nn.init.trunc_normal_(self.w2.weight, std=0.02)
+        # Truncate at 2 std; the default bounds of +-2 are absolute and let rare draws reach 2.0.
+        for weight in (self.w1.weight, self.w_gate.weight, self.w2.weight):
+            nn.init.trunc_normal_(weight, std=0.02, a=-0.04, b=0.04)
 
     def forward(self, x):
         return self.w2(F.silu(self.w_gate(x)) * self.w1(x))
@@ -283,8 +283,20 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         if self.config.pretrained_segmenter_path:
             from olmo.checkpoints.load_trajvit_segmenter_full import load_full_segmenter
             load_full_segmenter(self, self.config.pretrained_segmenter_path)
-        # 3) New random-init pieces (query_proj, cross_attn, projector) already
-        #    initialized in __init__; no-op here.
+        # 3) New random-init pieces (query_proj, cross_attn, projector). The model is built
+        #    on the meta device, so their __init__ initialization never reached real memory.
+        self.reset_parameters()
+
+    def _apply(self, fn, recurse=True):
+        super()._apply(fn, recurse)
+        # The rotary frequencies are non-persistent buffers: `to_empty` leaves them uninitialized
+        # and checkpoints do not restore them, so rebuild them whenever the module is moved.
+        for module in self.modules():
+            if isinstance(module, RotaryEmbedding3D) and not module.inv_freq_axis.is_meta:
+                module.inv_freq_axis = _build_freqs(
+                    module.per_axis_pairs, base=module.base, dtype=torch.float32,
+                    device=module.inv_freq_axis.device)
+        return self
 
     def apply_fsdp2(self, **kwargs):
         # SigLIP2 ViT: shard each resblock individually (Molmo2 standard).
