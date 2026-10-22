@@ -860,6 +860,8 @@ class Molmo2(ModelBase):
             num_images=batch.get("num_images"),
             multimodal_type=batch.get("multimodal_type"),
             num_image_starts=batch.get("num_image_starts"),
+            # The TrajVLM backbone needs per-entry clip counts to skip padded clips.
+            cum_image_bounds=batch.get("cum_image_bounds"),
         )
 
         llm_cfg = self.config.llm

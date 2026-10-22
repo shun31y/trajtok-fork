@@ -1,15 +1,17 @@
-extends: [../base/sft.yaml]
+schema_version: 1
+stage: sft
 run:
   name: stage2_videoqa
   output_dir: ../../results/stage2_videoqa
 # Select an exact checkpoint directory containing config.yaml (not a run root).
-checkpoint: ../../results/stage1_pixmo_cap/step22347
+checkpoint: /mnt/ssd1/shun/VideoUnderstanding/trajtok/checkpoints/stage1_pixmo_cap_full_qwen25_7b_lora/step5516
 # TrajTok paper (arXiv:2602.22779) Table 9: 128 frames, 10k steps, global batch 32, seq len 8192.
 # 10k x 32 = 320k examples drawn from the VideoQA mixture with the existing root-size sampling rates.
 model:
   num_frames: 128
   frames_per_clip: 16
 data:
+  mixture: video_academic
   # VideoQA datasets collectable without per-URL scraping or manual licence requests.
   datasets:
     - tgif
@@ -24,6 +26,8 @@ data:
     - intent_qa
     - llava_video_mc_academic
     - llava_video_oe_academic
+  num_workers: 6
+  prefetch_factor: 4
 training:
   max_steps: 10000
   global_batch_size: 32
@@ -31,3 +35,31 @@ training:
   # global batch of 32 is reached by gradient accumulation.
   micro_batch_size: 1
   seq_len: 8192
+  connector_learning_rate: 5e-6
+  vit_learning_rate: 5e-6
+  llm_learning_rate: 1e-5
+  connector_warmup: 200
+  vit_warmup: 200
+  llm_warmup: 200
+  compile: false
+launch:
+  gpus: [0, 1]
+# Generates answers for a few fixed training questions and logs them with frame thumbnails to wandb.
+evaluation:
+  enabled: true
+  tasks: [video_qualitative]
+  loss_tasks: []
+  interval: 500
+  max_examples: 3
+tracking:
+  enabled: true
+  project: trajvlm_stage2
+  entity: odango_team
+
+peft:
+  mode: connector_lora
+  lora:
+    rank: 16
+    alpha: 32
+    dropout: 0.0
+    target_modules: [att_proj, attn_out]

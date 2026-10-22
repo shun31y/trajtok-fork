@@ -112,9 +112,14 @@ def get_trajvlm_model(checkpoint, *, num_frames: int, frames_per_clip: int, conf
         frame_sample_mode="uniform_last_frame",
     )
 
+    # The backbone pools `frames_per_pool` frames into one set of trajectory tokens while the
+    # preprocessor reserves tokens per `frames_per_clip` frames, so they must agree (the paper
+    # proposes up to 128 tokens per 16-frame clip; pretrain inherited 8).
+    vision_backbone = dataclasses.replace(model_cfg.vision_backbone, frames_per_pool=frames_per_clip)
+
     model_cfg = TrajVlmConfig(
         llm=model_cfg.llm,
-        vision_backbone=model_cfg.vision_backbone,
+        vision_backbone=vision_backbone,
         data_formatter=model_cfg.data_formatter,
         mm_preprocessor=TrajVlmPreprocessorConfig(
             video=video_preproc,
