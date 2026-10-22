@@ -220,11 +220,12 @@ The standard YAML recipes now enable these trainable scopes:
 
 | Stage | Trainable | Frozen |
 | --- | --- | --- |
-| Stage1 (`peft.mode: connector_only`) | `vision_backbone.cross_attn` (TrajPerceiver), `image_projector` | LLM, ViT, segmenter, `query_proj`, embeddings and LM head |
-| Stage2 (`peft.mode: connector_lora`) | Same TrajPerceiver/Projector plus LLM LoRA A/B | All base LLM weights and every other module |
+| Stage1 (`peft.mode: connector_only`) | `vision_backbone.query_proj`, `cross_attn` (TrajPerceiver), `image_projector` | LLM, ViT, segmenter, embeddings and LM head |
+| Stage2 (`peft.mode: connector_lora`) | Same connector modules plus LLM LoRA A/B | All base LLM weights and every other module |
 
-`query_proj` is the separate 512→1152 bridge and is frozen. The Projector in
-this policy is `image_projector`, which maps trajectory tokens to LLM features.
+`query_proj` is the 512→1152 bridge from segmenter trajectories to the TrajPerceiver
+queries. The Projector in this policy is `image_projector`, which maps trajectory
+tokens to LLM features.
 Learning rates, data, batch, duration, scheduler, FSDP and evaluation settings
 are unchanged. LoRA parameters use the existing LLM optimizer group/rate.
 
