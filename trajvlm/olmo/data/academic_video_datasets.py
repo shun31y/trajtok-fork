@@ -5452,6 +5452,52 @@ class SSv2QA(DatasetBase):
         return self.data[item]
 
 
+class VideoQualitativeSamples(DatasetBase):
+    """A few fixed Stage2 training questions whose predictions are logged to wandb during training.
+
+    Each sample is (dataset name, example index, message index). The metadata carries the reference
+    answer and a strip of uniformly sampled frames, shown as the thumbnail in the wandb table.
+    """
+    SAMPLES = (
+        ("nextqa_mc", 0, 1),
+        ("tgif", 0, 1),
+        ("clevrer", 0, 0),
+    )
+    THUMBNAIL_FRAMES = 4
+    THUMBNAIL_HEIGHT = 160
+
+    def load(self):
+        from olmo.data.get_dataset import get_dataset_by_name
+        data_list = []
+        for name, example_ix, message_ix in self.SAMPLES:
+            example = get_dataset_by_name(name, "train").get(example_ix, np.random.RandomState(example_ix))
+            msg = example["message_list"][message_ix]
+            answer = msg["options"][msg["answer_idx"]] if "options" in msg else msg["answer"]
+            metadata = dict(example.get("metadata", {}), dataset=name, answer=answer)
+            data_list.append(dict(msg, video=example["video"], metadata=metadata))
+        return data_list
+
+    def get(self, item, rng):
+        example = dict(self.data[item])
+        example["metadata"] = dict(example["metadata"], image=self.thumbnail(example["video"]))
+        return example
+
+    @classmethod
+    def thumbnail(cls, video_path):
+        from PIL import Image
+        from torchcodec.decoders import VideoDecoder
+        decoder = VideoDecoder(video_path, num_ffmpeg_threads=1)
+        n_frames = decoder.metadata.num_frames
+        indices = np.linspace(0, n_frames, min(cls.THUMBNAIL_FRAMES, n_frames), endpoint=False).astype(int)
+        frames = decoder.get_frames_at(indices.tolist()).data.numpy().transpose(0, 2, 3, 1)
+        resized = []
+        for frame in frames:
+            h, w = frame.shape[:2]
+            size = (max(1, round(w * cls.THUMBNAIL_HEIGHT / h)), cls.THUMBNAIL_HEIGHT)
+            resized.append(np.asarray(Image.fromarray(frame).resize(size)))
+        return np.concatenate(resized, axis=1)
+
+
 class Paxion(DatasetBase):
     """Paxion — action antonym MC QA on SSV2 + Ego4d videos.
 

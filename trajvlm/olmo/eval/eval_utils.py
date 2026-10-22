@@ -18,6 +18,9 @@ def get_evaluator(name) -> EvaluatorConfig:
         return EvaluatorConfig(math_vista_eval=True)
     elif name == "point_bench":
         return EvaluatorConfig(point_bench_eval=True)
+    elif name == "video_qualitative":
+        # Unscored: the trainer's in-loop SavePredictions logs the table with thumbnails to wandb.
+        return EvaluatorConfig()
     elif name == "a_okvqa_da":
         return EvaluatorConfig(vqa_eval="a_okvqa_score")
     elif name.startswith("chart_qa"):
@@ -213,6 +216,8 @@ def get_evaluator(name) -> EvaluatorConfig:
 def get_default_max_tokens(name):
     if name == "dense_caption_eval":
         return 448
+    if name == "video_qualitative":
+        return 64  # Room for a sentence-long answer before Stage2 teaches the short style
     if name.startswith("vixmo_ab_test"):
         return 2048
     if name.startswith("molmo2_human_eval"):
@@ -381,6 +386,9 @@ def get_evaluation(
     ]
     if split is None:
         split = "test" if task_name in test_eval_tasks else "validation"
+    if name == "video_qualitative":
+        # Always show every fixed sample; padding instead of drop_last keeps them all on any world size.
+        max_examples = None
 
     ds = DataLoaderConfig(
         dataset=task_name,

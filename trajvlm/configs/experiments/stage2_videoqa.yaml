@@ -44,12 +44,17 @@ training:
   compile: false
 launch:
   gpus: [0, 1]
+# Generates answers for a few fixed training questions and logs them with frame thumbnails to wandb.
 evaluation:
-  enabled: false
-  tasks: []
+  enabled: true
+  tasks: [video_qualitative]
   loss_tasks: []
+  interval: 500
+  max_examples: 3
 tracking:
-  enabled: false
+  enabled: true
+  project: trajvlm_stage2
+  entity: odango_team
 
 peft:
   mode: connector_lora
