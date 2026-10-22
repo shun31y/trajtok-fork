@@ -32,7 +32,7 @@ from olmo.data.molmo2_datasets import (
 from olmo.data.molmo2_video_track_datasets import Molmo2VideoTrackInstruction, Molmo2VideoTrackEval, \
     MolmoPointTrackAny, MolmoPointTrackSyn
 from olmo.data.molmo_hardcode import Molmo2HardCodes
-from olmo.data.pixmo_datasets import PixMoMultiPoints, PixMoCapQa, PixMoCount, PixMoCap, \
+from olmo.data.pixmo_datasets import PixMoMultiPoints, PixMoCapQa, PixMoCount, PixMoCap, PixMoCapQualitative, \
     PixMoAskModelAnything, PixMoPoints, PixmoMultiImageQa, PixMoPointsEval
 from olmo.data.text_datasets import Tulu4Filtered
 
@@ -168,6 +168,8 @@ def get_dataset_by_name(dataset_name, split) -> Dataset:
         return PixMoCap(split, mode="transcript_and_caption")
     if dataset_name in ["pixmo_cap"]:
         return PixMoCap(split, mode="captions")
+    if dataset_name == "pixmo_cap_qualitative":
+        return PixMoCapQualitative(split)
     elif dataset_name in ["pixmo_count_train"]:
         return PixMoCount(split=split, counting="both")
     elif dataset_name in ["pixmo_count_counting"]:

@@ -419,6 +419,38 @@ class PixMoCap(Dataset):
         return out
 
 
+class PixMoCapQualitative(Dataset):
+    """A few fixed PixMoCap validation images whose generated captions are logged to wandb during training.
+
+    The metadata carries the reference caption and a downscaled copy of the image, shown in the wandb table.
+    """
+    SAMPLES = (0, 1, 2)
+    THUMBNAIL_SIZE = 512
+
+    def __init__(self, split):
+        # The images come from the held-out split whatever split is asked for.
+        self.captions = PixMoCap("validation", mode="captions")
+
+    def __len__(self):
+        return len(self.SAMPLES)
+
+    def get(self, item, rng):
+        example = self.captions.get(self.SAMPLES[item], rng)
+        msg = example["message_list"][0]
+        # Without image_url the wandb table embeds the local image rather than linking the source URL.
+        metadata = dict(image_path=example["image"], answer=msg["text"],
+                        image=self.thumbnail(example["image"]))
+        return dict(image=example["image"], style=msg["style"], metadata=metadata)
+
+    @classmethod
+    def thumbnail(cls, image_path):
+        from PIL import Image
+        with Image.open(image_path) as img:
+            img = img.convert("RGB")
+            img.thumbnail((cls.THUMBNAIL_SIZE, cls.THUMBNAIL_SIZE))
+            return np.asarray(img)
+
+
 class PixMoAskModelAnything(Dataset):
     @classmethod
     def download(cls, n_procs=1, check_sha=True, n_val=2048, cache_only=False):
