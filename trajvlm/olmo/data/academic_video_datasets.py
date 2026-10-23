@@ -10,6 +10,7 @@ import subprocess
 import sys
 import zipfile
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from os.path import join, exists, isfile
 from typing import Literal, Optional
 import ast
@@ -352,6 +353,87 @@ class MotionBenchCaption(DatasetBase):
                 "message_list": [msg]
             }
             data_list.append(formatted_ex)
+        return data_list
+
+    def get(self, item, rng):
+        return self.data[item]
+
+
+FAVOR_HOME = join(VIDEO_DATA_HOME, "FAVOR")
+
+
+class FavorTrain(DatasetBase):
+    """FAVOR-Train manual motion captions (https://huggingface.co/datasets/FAVOR-Bench/FAVOR).
+
+    The ego-centric clips are hosted on HF; the third-person Koala36M clips are YouTube
+    segments that `download` cuts locally with yt-dlp.
+    """
+    HF_REPO = "FAVOR-Bench/FAVOR"
+    VIDEO_DIR = join(FAVOR_HOME, "videos", "FAVOR-Train")
+    THIRD_PERSON = ("Koala36M",)
+
+    @classmethod
+    def download(cls, n_procs=1):
+        # question_perspective.json lists the FAVOR-Bench videos, used to drop eval overlap.
+        for fname in ["train.json", "question_perspective.json"]:
+            if not exists(join(FAVOR_HOME, fname)):
+                hf_hub_download(repo_id=cls.HF_REPO, repo_type="dataset",
+                                filename=fname, local_dir=FAVOR_HOME)
+        snapshot_download(repo_id=cls.HF_REPO, repo_type="dataset", local_dir=FAVOR_HOME,
+                          allow_patterns=["videos/FAVOR-Train/*"], max_workers=n_procs)
+        rows = [row for row in json.loads(read_file(join(FAVOR_HOME, "train.json")))
+                if row["subset"] in cls.THIRD_PERSON
+                and not exists(join(cls.VIDEO_DIR, row["video_name"]))]
+        if not rows:
+            return
+        if shutil.which("yt-dlp") is None:
+            raise FileNotFoundError(
+                f"{len(rows)} FAVOR-Train YouTube clips are missing and yt-dlp is not on PATH.\n"
+                "Install it (e.g. `uv tool install yt-dlp`) and rerun the download."
+            )
+
+        def fetch(row):
+            out = join(cls.VIDEO_DIR, row["video_name"])
+            cmd = ["yt-dlp", "--quiet", "--no-warnings",
+                   "-f", "bv*[height<=480][ext=mp4]+ba[ext=m4a]/b[height<=480]/b",
+                   "--download-sections", f"*{row['start']}-{row['end']}",
+                   "--force-keyframes-at-cuts", "--merge-output-format", "mp4",
+                   "-o", out, row["url"]]
+            # Cloud IPs usually hit YouTube's bot check; pass exported browser cookies.
+            if os.environ.get("YTDLP_COOKIES"):
+                cmd[1:1] = ["--cookies", os.environ["YTDLP_COOKIES"]]
+            return subprocess.run(cmd, capture_output=True).returncode == 0 and exists(out)
+
+        os.makedirs(cls.VIDEO_DIR, exist_ok=True)
+        log.info(f"Downloading {len(rows)} FAVOR-Train YouTube clips...")
+        with ThreadPoolExecutor(max(n_procs, 1)) as pool:
+            ok = sum(tqdm(pool.map(fetch, rows), total=len(rows)))
+        if ok < len(rows):
+            log.warning(f"FAVOR-Train: {len(rows) - ok} / {len(rows)} YouTube clips are unavailable")
+
+    def __init__(self, split, subsets=THIRD_PERSON):
+        assert split == "train", f"Invalid split: {split}"
+        self.subsets = subsets
+        super().__init__(split)
+
+    def load(self):
+        data_list = []
+        missing = 0
+        for row in json.loads(read_file(join(FAVOR_HOME, "train.json"))):
+            if self.subsets is not None and row["subset"] not in self.subsets:
+                continue
+            video_path = join(self.VIDEO_DIR, row["video_name"])
+            if not exists(video_path):
+                missing += 1
+                continue
+            data_list.append({
+                "video": video_path,
+                "message_list": [dict(text=row["caption"], style="video_motion_caption")],
+            })
+        if missing:
+            log.warning(f"FAVOR-Train: skipped {missing} examples without a local video")
+        if not data_list:
+            raise FileNotFoundError(f"No FAVOR-Train videos found under {self.VIDEO_DIR}; run its download first")
         return data_list
 
     def get(self, item, rng):

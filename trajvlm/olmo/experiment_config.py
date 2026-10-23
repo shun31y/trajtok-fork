@@ -37,6 +37,11 @@ class Data:
     mixture: str = MISSING
     pixmo_cap_path: Optional[str] = None
     datasets: Optional[List[str]] = None
+    # Expected examples drawn from each dataset over the run (sampling rates proportional
+    # to these counts); replaces data.datasets and may name any registered video dataset.
+    dataset_examples: Optional[Dict[str, int]] = None
+    # Benchmarks whose videos are dropped from every training dataset (eval_overlap.EVAL_VIDEO_IDS).
+    exclude_eval_videos: List[str] = field(default_factory=list)
     train_examples: Optional[int] = None
     num_workers: int = 2
     prefetch_factor: int = 4
@@ -249,7 +254,8 @@ def validate_recipe(r):
     if r.stage == 'pretrain':
         if r.model.num_frames is not None or r.model.frames_per_clip is not None:
             raise ValueError('pretrain is image-only; omit model.num_frames and model.frames_per_clip')
-        if r.checkpoint is not None or r.data.mixture != 'pixmo_cap' or r.data.datasets is not None:
+        if (r.checkpoint is not None or r.data.mixture != 'pixmo_cap' or r.data.datasets is not None
+                or r.data.dataset_examples is not None or r.data.exclude_eval_videos):
             raise ValueError('pretrain requires data.mixture=pixmo_cap, no subset and no checkpoint')
         if t.context_parallel_degree != 1:
             raise ValueError('pretrain currently requires context_parallel_degree=1')
@@ -266,6 +272,13 @@ def validate_recipe(r):
             raise ValueError('sft recipe supports data.mixture=video_academic; legacy CLI supports molmo2')
         if r.data.datasets is not None and (not r.data.datasets or len(set(r.data.datasets)) != len(r.data.datasets)):
             raise ValueError('data.datasets must be a nonempty list of unique video dataset names')
+        if r.data.dataset_examples is not None:
+            if r.data.datasets is not None:
+                raise ValueError('set only one of data.datasets and data.dataset_examples')
+            if not r.data.dataset_examples or any(n <= 0 for n in r.data.dataset_examples.values()):
+                raise ValueError('data.dataset_examples must map dataset names to positive counts')
+        if len(set(r.data.exclude_eval_videos)) != len(r.data.exclude_eval_videos):
+            raise ValueError('data.exclude_eval_videos must be unique benchmark names')
 
 
 def build_experiment(experiment):
@@ -335,6 +348,8 @@ def build_experiment(experiment):
         cfg = pretrain.build_train_config(args, configure=configure)
     else:
         from launch_scripts.sft import VIDEO_ACADEMIC_DATASETS
+        from olmo.data.eval_overlap import EVAL_VIDEO_IDS
+        from olmo.data.get_dataset import get_dataset_class_by_name
         datasets = [WeightedDataset.build(x) for x in VIDEO_ACADEMIC_DATASETS]
         if r.data.datasets is not None:
             by_name = {x.dataset_name: x for x in datasets}
@@ -342,6 +357,24 @@ def build_experiment(experiment):
             if unknown:
                 raise ValueError(f'Unknown video_academic datasets: {sorted(unknown)}')
             datasets = [by_name[name] for name in r.data.datasets]
+        elif r.data.dataset_examples is not None:
+            unknown = []
+            for name in r.data.dataset_examples:
+                try:
+                    get_dataset_class_by_name(name)
+                except NotImplementedError:
+                    unknown.append(name)
+            if unknown:
+                raise ValueError(f'Unknown video datasets: {sorted(unknown)}')
+            # root_size_factor=0 makes the rate the count itself rather than sqrt(dataset size).
+            datasets = [WeightedDataset(name, sampling_rate=float(n), root_size_factor=0)
+                        for name, n in r.data.dataset_examples.items()]
+        unknown = set(r.data.exclude_eval_videos) - EVAL_VIDEO_IDS.keys()
+        if unknown:
+            raise ValueError(f'Unknown data.exclude_eval_videos benchmarks: {sorted(unknown)}')
+        if r.data.exclude_eval_videos:
+            for task in datasets:
+                task.exclude_eval_videos = list(r.data.exclude_eval_videos)
         checkpoint_config = Path(r.checkpoint) / 'config.yaml'
         if not checkpoint_config.is_file():
             raise ValueError(f'Stage2 requires checkpoint metadata: {checkpoint_config}')

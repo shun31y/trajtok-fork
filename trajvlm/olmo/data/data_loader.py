@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from olmo.config import BaseConfig
 from olmo.data.dataset import DeterministicDataset, Dataset
 from olmo.data.dynamic_packer import PackingConfig
+from olmo.data.eval_overlap import exclude_eval_videos
 from olmo.data.get_dataset import get_dataset_by_name
 from olmo.data.iterable_dataset_mixture import IterableDatasetMixture
 from olmo.dist_util import get_dp_process_group
@@ -80,6 +81,9 @@ class WeightedDataset(BaseConfig):
 
     override_p_high_res: Optional[float] = None
     """Override p_high_res in the preprocessor for this dataset"""
+
+    exclude_eval_videos: Optional[List[str]] = None
+    """Benchmarks whose videos are dropped from this dataset, see `eval_overlap.EVAL_VIDEO_IDS`"""
 
 
 @dataclass
@@ -245,6 +249,8 @@ class DataLoaderConfig(BaseConfig):
                         t0 = time.perf_counter()
                         log.info(f"Loading train dataset {task.dataset_name}/{self.split}")
                         dataset = get_dataset_by_name(task.dataset_name, self.split)
+                        if task.exclude_eval_videos:
+                            exclude_eval_videos(dataset, task.dataset_name, task.exclude_eval_videos)
                         delta = time.perf_counter() - t0
                         if delta > 1:
                             log.info(f"Dataset {task.dataset_name}/{self.split} took {delta:0.1f} seconds")

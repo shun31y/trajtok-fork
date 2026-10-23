@@ -8,7 +8,7 @@ from olmo.data.academic_image_datasets import Vqa2, TextVqa, InfoQa, DocQa, AI2D
 from olmo.data.academic_multi_image_datasets import MuirBench, BLINK, MMIU, MantisInstruct
 from olmo.data.academic_video_datasets import (
     Tomato, TemporalBenchQa, MotionBench,
-    MotionBenchCaption, MVBench, VideoEvalProMC, MLVU, LongVideoBench, LVBench, VideoMME,
+    MotionBenchCaption, FavorTrain, MVBench, VideoEvalProMC, MLVU, LongVideoBench, LVBench, VideoMME,
     AcademicVideoPoint, EgoSchema, ActivityNet, COIN, EpicKitchens, MomentsInTime, Kinetics710,
     Youcook2, PerceptionTest, Ego4d, Ego4dCachedClips, QVHighlights, LLaVAVideoAcademic,
     CameraBenchTrain, CLEVRER, FunQA, How2QA, IntentQA, \
@@ -265,6 +265,10 @@ def get_dataset_by_name(dataset_name, split) -> Dataset:
         return MotionBench(split=split)
     if dataset_name in ["motionbench_caption", "motionbench_train"]:
         return MotionBenchCaption(split=split)
+    if dataset_name == "favor_train":
+        return FavorTrain(split=split)
+    if dataset_name == "favor_train_all":
+        return FavorTrain(split=split, subsets=None)
     if dataset_name == "temporal_bench":
         return TemporalBenchQa(split=split)
     if dataset_name == "temporal_bench_mc":
