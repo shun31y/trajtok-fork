@@ -80,6 +80,7 @@ def build_model_cfg(
     pretrained_segmenter_path: str | None,
     num_traj: int = 128,
     image_res: int = 378,
+    mask_empty_trajectories: bool = False,
     debug: bool = False,
 ) -> Molmo2Config:
     llm = LLMS[llm_name]
@@ -107,6 +108,7 @@ def build_model_cfg(
         pretrained_segmenter_path=pretrained_segmenter_path,
         num_traj=num_traj,
         frames_per_pool=8,
+        mask_empty_trajectories=mask_empty_trajectories,
         connector_activation_checkpointing=not debug,
     )
     image_preproc = TrajVitImageConfig(
@@ -162,6 +164,8 @@ def make_parser():
         help="Path to our TrajViT segmenter latest.pth (or 'none' to start from scratch).",
     )
     parser.add_argument("--num_traj", type=int, default=128)
+    parser.add_argument("--mask_empty_trajectories", action="store_true",
+                        help="Hide trajectories the segmenter assigns no patch from the LLM.")
     parser.add_argument("--image_res", type=int, default=378,
                         help="SigLIP2 native is 378×378.")
     parser.add_argument("--max_duration", type=int, default=None,
@@ -190,6 +194,7 @@ def build_train_config(args, other_args=(), *, dataset_size=None, configure=None
         pretrained_segmenter_path=seg_ckpt,
         num_traj=args.num_traj,
         image_res=args.image_res,
+        mask_empty_trajectories=args.mask_empty_trajectories,
         debug=args.debug,
     )
 

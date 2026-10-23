@@ -698,6 +698,7 @@ class Molmo2(ModelBase):
             attention_bias = torch.where(attention_mask, 0, torch.finfo(x.dtype).min)
 
         image_pos_masks: Optional[List[torch.Tensor]] = None
+        blocked_image_tokens: Optional[torch.Tensor] = None
         if images is not None:
             vision_backbone_output = self.vision_backbone(
                 images, 
@@ -709,8 +710,21 @@ class Molmo2(ModelBase):
                 image_shard_boundaries=kwargs.get('image_shard_boundaries')
             )
             image_features = vision_backbone_output
+            image_token_mask = None
+            if isinstance(vision_backbone_output, tuple):
+                # Backbones with a fixed token budget mark the tokens that carry no content
+                image_features, image_token_mask = vision_backbone_output
             is_high_res_patch = input_ids.view(-1) == self._image_high_res_id
             x.view(-1, x.shape[-1])[is_high_res_patch] += image_features
+            if image_token_mask is not None and not image_token_mask.all():
+                blocked_image_tokens = torch.zeros_like(is_high_res_patch)
+                blocked_image_tokens[is_high_res_patch] = ~image_token_mask
+                blocked_image_tokens = blocked_image_tokens.view(batch_size, seq_len)
+                # Hide them as keys from every other position; each still attends to itself so
+                # no attention row is left empty.
+                not_self = ~torch.eye(attention_bias.shape[-1], dtype=torch.bool, device=dev)
+                attention_bias = attention_bias.masked_fill(
+                    blocked_image_tokens[:, None, None, :] & not_self, torch.finfo(attention_bias.dtype).min)
 
         if enable_cp:
             (
@@ -818,6 +832,7 @@ class Molmo2(ModelBase):
             logits=logits,
             attn_key_values=attn_key_values,
             hidden_states=tuple(all_hidden_states) if output_hidden_states else None,
+            internal=None if blocked_image_tokens is None else dict(blocked_image_tokens=blocked_image_tokens),
             labels=labels,
             loss_masks=loss_masks,
             response_mask=response_mask,
@@ -983,6 +998,13 @@ class Molmo2(ModelBase):
 
             # Create new state.
             state = flatten_past_key_values(output.attn_key_values)
+            if output.internal and "blocked_image_tokens" in output.internal:
+                # Keep the image tokens the pre-fill hid hidden while decoding
+                blocked = output.internal["blocked_image_tokens"]
+                if attention_mask is None:
+                    raise NotImplementedError("Hiding image tokens while decoding requires an attention mask")
+                attention_mask = attention_mask.clone()
+                attention_mask[:, :blocked.shape[1]] &= ~blocked
             if attention_mask is not None:
                 state["attention_mask"] = attention_mask
             if attention_bias is not None:

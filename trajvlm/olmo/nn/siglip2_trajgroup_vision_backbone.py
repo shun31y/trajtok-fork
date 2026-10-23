@@ -101,6 +101,11 @@ class SigLip2TrajGroupVisionBackboneConfig(MolmoVisionBackboneConfig):
     attend_other_latents: bool = False
     num_latent_per_traj: int = 1
 
+    # Hide trajectories the segmenter assigns no patch from the LLM, as SegmentTokenizer's
+    # `attn_mask` does. The sequence keeps num_traj tokens per image/clip, but only the assigned
+    # ones are attended to, so the effective token count varies with the image.
+    mask_empty_trajectories: bool = False
+
     # Optional: ckpt to warm-start the SimpleSegmenter from.
     pretrained_segmenter_path: Optional[str] = None
 
@@ -412,8 +417,13 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         assign_logits_full: torch.Tensor,  # (B, T_chunk*56*56, 128) (raw)
         traj_features_512: torch.Tensor,   # (B, 128, 512)
         T_chunk: int,
-    ) -> torch.Tensor:
-        """Produce 128 trajectory tokens for one (B, T_chunk, ...) chunk."""
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Produce 128 trajectory tokens for one (B, T_chunk, ...) chunk.
+
+        Also returns (B, 128) whether each trajectory was assigned any patch. Unassigned
+        trajectories only see the fallback patches of `_build_query_mask`, so, as with
+        SegmentTokenizer's `attn_mask`, they carry no content of their own.
+        """
         B = siglip_F.shape[0]
         # ---- Interpolate assignment masks from 56x56 to 27x27 (SigLIP2 grid) ----
         seg_res = self.config.segmenter_latent_res                  # 56
@@ -431,6 +441,9 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         # ---- argmax -> query_mask ----
         predicted_label = assign_at_vit.argmax(dim=-1)               # (B, T*729)
         query_mask = self._build_query_mask(predicted_label)         # (B, M=128, T*729)
+        is_assigned = torch.zeros(
+            (B, self.config.num_traj), dtype=torch.bool, device=predicted_label.device,
+        ).scatter_(1, predicted_label, True)                         # (B, M)
 
         # ---- Up-project segmenter's 512-d initial queries to 1152 ----
         init_q_1152 = self.query_proj(traj_features_512)             # (B, 128, 1152)
@@ -447,7 +460,7 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
             attention_mask=(None, query_mask),       # SegmentTokenizer-style tuple
             input_latent=init_q_1152,
         )                                                            # (B, 128, 1152)
-        return out
+        return out, is_assigned
 
     def forward(
         self,
@@ -459,13 +472,16 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         cum_image_bounds=None,
         image_shard_boundaries=None,
         **_,
-    ) -> torch.Tensor:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         images: (B, num_image, n_patches, H*W*3) — molmo2 data-pipeline form,
                 pre-normalised at SigLIP2's image_res (378 by default).
                 For images: (n_image=1, n_patches=1).
                 For videos: (n_image=n_clips, n_patches=frames_per_clip).
-        Returns: (total_image_tokens_across_batch, d_model) flat tensor.
+        Returns: (total_image_tokens_across_batch, d_model) flat tensor. With
+                 `mask_empty_trajectories`, also a (total_image_tokens_across_batch,) bool mask
+                 of tokens whose trajectory was assigned patches; the others are zeroed and
+                 should not be attended to.
         """
         cfg = self.config
         vit_res = cfg.vit.image_default_input_size[0]
@@ -506,7 +522,10 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         keep_idx = [b for b, n in enumerate(n_real_per_b) if n > 0]
         if len(keep_idx) == 0:
             d_model = self.image_projector.w2.out_features
-            return images.new_zeros((0, d_model))
+            out = images.new_zeros((0, d_model))
+            if not cfg.mask_empty_trajectories:
+                return out
+            return out, torch.zeros(0, dtype=torch.bool, device=images.device)
 
         Fpp = cfg.frames_per_pool
         n_patches = images.shape[2]
@@ -516,7 +535,7 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         # has 1 clip, full video has nc clips, packed mix has 1..nc). Vectorising
         # across entries with different shapes would require ragged tensors;
         # B is typically 1-2 so the inner-loop cost is acceptable.
-        per_entry_tokens = []
+        per_entry_tokens, per_entry_valid = [], []
         for b in keep_idx:
             n_real_b = n_real_per_b[b]
             images_b = images[b:b+1, :n_real_b]  # (1, n_real_b, n_patches, H*W*3)
@@ -554,12 +573,16 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
 
             assign_logits, traj_q_512 = self._segmenter_forward(frames_for_seg)
 
-            tokens_b = self._pool_one_chunk(
+            tokens_b, valid_b = self._pool_one_chunk(
                 F_siglip, assign_logits, traj_q_512, T_chunk=T_chunk,
             )                                                              # (n_chunks_b, 128, 1152)
             tokens_b = tokens_b.view(n_chunks_b * cfg.num_traj, self.vit_emb_dim)
             per_entry_tokens.append(tokens_b)
+            per_entry_valid.append(valid_b.view(n_chunks_b * cfg.num_traj))
 
         tokens = torch.cat(per_entry_tokens, dim=0)                         # (total_tokens, 1152)
+        valid = torch.cat(per_entry_valid, dim=0)                           # (total_tokens,)
         out = self.image_projector(tokens)                                  # (total_tokens, d_llm)
-        return out
+        if not cfg.mask_empty_trajectories:
+            return out
+        return out * valid.unsqueeze(-1).to(out.dtype), valid

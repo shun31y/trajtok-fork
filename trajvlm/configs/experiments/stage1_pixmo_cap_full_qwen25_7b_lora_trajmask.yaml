@@ -1,0 +1,12 @@
+# stage1_pixmo_cap_full_qwen25_7b_lora_v2 with trajectories the segmenter assigns no patch hidden
+# from the LLM. Everything else, including the qualitative wandb captions, is inherited unchanged;
+# the run gets its own name and directory.
+# Source stage1_pixmo_cap_full.env.sh before inspection/training.
+extends: [stage1_pixmo_cap_full_qwen25_7b_lora_v2.yaml]
+
+run:
+  name: stage1_pixmo_cap_full_qwen25_7b_lora_trajmask
+  output_dir: /data/trajtok/runs/stage1_pixmo_cap_full_qwen25_7b_lora_trajmask
+
+model:
+  mask_empty_trajectories: true

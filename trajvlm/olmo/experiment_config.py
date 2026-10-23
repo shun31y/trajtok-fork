@@ -26,6 +26,8 @@ class Model:
     segmenter_path: Optional[str] = None
     num_traj: Optional[int] = None
     image_res: Optional[int] = None
+    # Hide trajectories assigned no patch from the LLM; sft inherits it from the checkpoint.
+    mask_empty_trajectories: Optional[bool] = None
     num_frames: Optional[int] = None
     frames_per_clip: Optional[int] = None
 
@@ -341,6 +343,7 @@ def build_experiment(experiment):
             '--max_duration', str(duration), '--global_batch_size', str(t.global_batch_size),
             '--device_train_microbatch_size', str(t.micro_batch_size), '--seq_len', str(t.seq_len),
             '--pointing', '0', '--nlp', '0', *([] if t.compile else ['--no_compile']),
+            *(['--mask_empty_trajectories'] if r.model.mask_empty_trajectories else []),
         ])
         cfg = pretrain.build_train_config(args, configure=configure)
     else:
@@ -414,6 +417,9 @@ def validate_train_config(cfg, recipe, world_size=None):
         raise ValueError('model.num_traj disagrees with inherited checkpoint')
     if recipe.model.image_res is not None and cfg.model.mm_preprocessor.image.image_res != recipe.model.image_res:
         raise ValueError('model.image_res disagrees with inherited checkpoint')
+    if (recipe.model.mask_empty_trajectories is not None
+            and vis.mask_empty_trajectories != recipe.model.mask_empty_trajectories):
+        raise ValueError('model.mask_empty_trajectories disagrees with inherited checkpoint')
     if cfg.max_duration != cfg.stop_at:
         raise ValueError('max_duration and stop_at must agree')
     for group in cfg.data.kwargs_mixture or []:
