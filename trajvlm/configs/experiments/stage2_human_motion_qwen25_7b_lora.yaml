@@ -1,0 +1,68 @@
+# Stage2 video SFT aimed at third-person human-motion benchmarks (FAVOR-Bench, MotionBench).
+# Optimization follows the TrajTok paper's Stage2 (Table 9: 10k steps, global batch 32,
+# seq 8192, 128 frames in 16-frame clips, LLM 1e-5 / ViT 5e-6 / connector 5e-6), but the
+# 320k examples are reallocated from the paper's Molmo2 mixture to human-motion data, and
+# the model keeps Stage1's Qwen2.5-7B + connector LoRA (the ViT stays frozen).
+# Source stage1_pixmo_cap_full.env.sh before inspection/training.
+extends: [../base/sft.yaml]
+
+launch:
+  gpus: [0,1]
+
+run:
+  name: stage2_human_motion_qwen25_7b_lora
+  output_dir: /data/trajtok/runs/stage2_human_motion_qwen25_7b_lora
+# Final checkpoint of stage1_pixmo_cap_full_qwen25_7b_lora (1 epoch = 5516 steps).
+checkpoint: /data/trajtok/runs/stage1_pixmo_cap_full_qwen25_7b_lora/step5516
+
+model:
+  num_frames: 128
+  frames_per_clip: 16
+
+data:
+  # Expected examples per dataset over 10k x 32 = 320k (rates are proportional to these).
+  dataset_examples:
+    # Fine-grained motion recognition / counting (160k)
+    favor_train: 40000          # third-person Koala36M clips only (~14k videos)
+    kinetics_qa: 30000
+    tgif: 30000
+    sportsqa_oe: 20000
+    motionbench_train: 15000    # 5k videos
+    camerabench_qa: 9000
+    countix_oe: 8000
+    moments_in_time_qa: 8000
+    # Action order / temporal grounding (100k)
+    charades_sta_all_qa: 25000
+    star: 25000
+    activitynet_all_qa: 20000
+    video_localized_narratives: 8000
+    video_localized_narratives_caption: 7000
+    how2qa: 8000
+    coin_all_qa: 7000
+    # General and causal video QA, keeps the multiple-choice format (60k)
+    llava_video_mc_academic: 15000
+    llava_video_oe_academic: 15000
+    nextqa_mc: 12000
+    intent_qa: 8000
+    funqa: 6000
+    social_iq2: 4000
+  # 590 of FAVOR-Bench's 868 Charades videos are in Charades-STA/STAR train.
+  exclude_eval_videos: [favor_bench, motionbench]
+  num_workers: 12
+  pad: to_longest
+
+training:
+  max_steps: 10000
+  global_batch_size: 32
+  micro_batch_size: 1
+  fsdp_precision: mixed
+  seq_len: 8192
+
+trainer_overrides:
+  save_interval: 1000
+  save_num_checkpoints_to_keep: 2
+
+tracking:
+  enabled: true
+  project: trajvlm_stage2
+  entity: ${oc.env:WANDB_ENTITY}

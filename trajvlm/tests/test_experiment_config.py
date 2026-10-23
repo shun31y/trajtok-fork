@@ -32,6 +32,11 @@ def serial(cfg):
     # The new optional architecture field is absent from pre-PEFT snapshots.
     if value.get('model', {}).get('llm', {}).get('lora') is None:
         value.get('model', {}).get('llm', {}).pop('lora', None)
+    # Likewise the optional per-dataset eval-video exclusion.
+    for group in value.get('data', {}).get('kwargs_mixture') or []:
+        for task in group['datasets']:
+            if task.get('exclude_eval_videos') is None:
+                task.pop('exclude_eval_videos', None)
     return value
 
 
@@ -146,6 +151,37 @@ class Experiments(unittest.TestCase):
     def test_unknown_dataset(self):
         with self.assertRaisesRegex(ValueError, 'Unknown video_academic'):
             build_experiment(self.experiment(2, ['data.datasets=[does_not_exist]']))
+
+    def test_dataset_examples_set_proportional_rates_and_exclusion(self):
+        # The sample Stage2 recipe selects data.datasets, which dataset_examples replaces.
+        exp = self.experiment(2, ['data.datasets=null', 'data.dataset_examples={favor_train: 30, star: 10}',
+                                  'data.exclude_eval_videos=[favor_bench]'])
+        group, = build_experiment(exp).data.kwargs_mixture
+        self.assertEqual([(d.dataset_name, d.sampling_rate, d.root_size_factor, d.exclude_eval_videos)
+                          for d in group.datasets],
+                         [('favor_train', 30.0, 0, ['favor_bench']), ('star', 10.0, 0, ['favor_bench'])])
+
+    def test_dataset_examples_errors(self):
+        with self.assertRaisesRegex(ValueError, 'only one of'):
+            self.experiment(2, ['data.datasets=[tgif]', 'data.dataset_examples={star: 1}'])
+        with self.assertRaisesRegex(ValueError, 'positive counts'):
+            self.experiment(2, ['data.datasets=null', 'data.dataset_examples={star: 0}'])
+        with self.assertRaisesRegex(ValueError, 'Unknown video datasets'):
+            build_experiment(self.experiment(2, ['data.datasets=null', 'data.dataset_examples={does_not_exist: 1}']))
+        with self.assertRaisesRegex(ValueError, 'exclude_eval_videos benchmarks'):
+            build_experiment(self.experiment(2, ['data.exclude_eval_videos=[mvbench]']))
+        with self.assertRaisesRegex(ValueError, 'no subset'):
+            self.experiment(1, ['data.exclude_eval_videos=[favor_bench]'])
+
+    def test_human_motion_recipe(self):
+        exp = load_experiment(ROOT / 'configs/experiments/stage2_human_motion_qwen25_7b_lora.yaml',
+                              [f'checkpoint={FIXTURES}/pretrain_checkpoint', f'run.output_dir={self.root}/results'])
+        self.assertEqual(sum(exp.recipe.data.dataset_examples.values()),
+                         exp.recipe.training.max_steps * exp.recipe.training.global_batch_size)
+        cfg = build_experiment(exp)
+        self.assertEqual(cfg.model.mm_preprocessor.video.num_frames, 128)
+        self.assertEqual(cfg.model.mm_preprocessor.video.frames_per_clip, 16)
+        self.assertEqual(cfg.data.sequence_length, 8192)
 
     def test_precedence_and_epochs_recompute(self):
         exp = self.experiment(overrides=['training.max_steps=null', 'training.epochs=4',
