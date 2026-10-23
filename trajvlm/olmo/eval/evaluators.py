@@ -368,14 +368,14 @@ class SavePredictions(Evaluator):
 
         if self.table:
             metrics["prediction_table"] = gather_examples_as_html(self.table, tokenizer, metadatas, predictions)
-            if any(isinstance(m.get("image"), np.ndarray) for m in metadatas):
-                # Tasks that carry a thumbnail are also logged as captioned wandb.Images, which
-                # the wandb UI shows in full instead of the corner of an Html panel.
-                n = min(len(local_rows), (self.table + get_world_size() - 1) // get_world_size())
-                metrics["prediction_images"] = ImageTable([
-                    dict(image=metadatas[ix].get("image"), prompt=local_rows[ix]["prompt"],
-                         prediction=local_rows[ix]["prediction"], gt=metadatas[ix].get("answer"))
-                    for ix in range(n)])
+            # Examples that carry a thumbnail are also logged as captioned wandb.Images, which the
+            # wandb UI shows in full instead of the corner of an Html panel. Every rank returns
+            # the metric, even with no such example, since each metric is gathered across ranks.
+            n = min(len(local_rows), (self.table + get_world_size() - 1) // get_world_size())
+            metrics["prediction_images"] = ImageTable([
+                dict(image=metadatas[ix]["image"], prompt=local_rows[ix]["prompt"],
+                     prediction=local_rows[ix]["prediction"], gt=metadatas[ix].get("answer"))
+                for ix in range(n) if isinstance(metadatas[ix].get("image"), np.ndarray)])
         return metrics
 
 
