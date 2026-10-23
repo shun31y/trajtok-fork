@@ -40,12 +40,10 @@ def _run_rank(rank, group_file, out_dir):
         evaluator = InfEvaluator([SavePredictions(out_dir, save_tokens=False, log_examples=0)])
         metrics = evaluator(predictions, metadatas, FakeTokenizer(), torch.device('cpu'), step=500)
         if rank == 0:
-            table = metrics["prediction_images"]
-            assert isinstance(table, wandb.Table)
+            images = metrics["prediction_images"]
             summary = dict(
-                columns=table.columns,
-                images=[isinstance(row[0], wandb.Image) for row in table.data],
-                text=[row[1:] for row in table.data],
+                images=[isinstance(image, wandb.Image) for image in images],
+                captions=[image._caption for image in images],
                 html_images=metrics["prediction_table"].html.count("data:image/jpeg"),
             )
             Path(out_dir, "summary.json").write_text(json.dumps(summary))
@@ -58,10 +56,9 @@ class PredictionTableTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             mp.spawn(_run_rank, args=(str(Path(tmp, "group")), tmp), nprocs=WORLD_SIZE)
             summary = json.loads(Path(tmp, "summary.json").read_text())
-        self.assertEqual(summary["columns"], ["image", "prompt", "prediction", "gt"])
         self.assertEqual(summary["images"], [True, True, True])
-        self.assertEqual(summary["text"], [
-            [f"t{200 + ix}", f"t{100 + ix} t1", f"caption {ix}"] for ix in range(3)])
+        self.assertEqual(summary["captions"], [
+            f"PREDICTION:\nt{100 + ix} t1\n\nREFERENCE:\ncaption {ix}\n\nPROMPT:\nt{200 + ix}" for ix in range(3)])
         self.assertEqual(summary["html_images"], 3)
 
 

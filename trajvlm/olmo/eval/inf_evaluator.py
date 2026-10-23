@@ -81,9 +81,10 @@ class InfEvaluator:
                     all_predictions = [None]*get_world_size()
                     dist.gather_object(v, all_predictions)
                     rows = flatten_list([x.rows for x in all_predictions])
-                    resolved_metrics[k] = wandb.Table(columns=list(ImageTable.COLUMNS), data=[
-                        [None if r["image"] is None else wandb.Image(r["image"]),
-                         r["prompt"], r["prediction"], r["gt"]] for r in rows])
+                    # Not a wandb.Table: logging a table creates an artifact, and online wandb then
+                    # makes a blocking API request on this rank while the others wait in a collective.
+                    resolved_metrics[k] = [wandb.Image(r["image"], caption=ImageTable.caption(r))
+                                           for r in rows if r["image"] is not None]
                 else:
                     dist.gather_object(v, None)
             elif isinstance(v, List):
