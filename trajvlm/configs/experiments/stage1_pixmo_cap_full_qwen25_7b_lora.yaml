@@ -50,11 +50,9 @@ training:
   llm_warmup: 2000
   compile: false
 
-# Besides the validation loss, captions three fixed validation images and logs them with the
-# image and reference caption to wandb.
 evaluation:
   enabled: true
-  tasks: [pixmo_cap_qualitative]
+  tasks: []
   loss_tasks: [pixmo_cap, pixmo_cap_with_transcripts]
   interval: 500  # As in trajvlm_pretrain.py
   max_examples: 2000

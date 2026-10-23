@@ -1,0 +1,13 @@
+# Rerun of stage1_pixmo_cap_full_qwen25_7b_lora with the vision connector fix (#12).
+# The training recipe is inherited unchanged; the first run's checkpoints are kept separate.
+# Source stage1_pixmo_cap_full.env.sh before inspection/training.
+extends: [stage1_pixmo_cap_full_qwen25_7b_lora.yaml]
+
+run:
+  name: stage1_pixmo_cap_full_qwen25_7b_lora_v2
+  output_dir: /data/trajtok/runs/stage1_pixmo_cap_full_qwen25_7b_lora_v2
+
+# Besides the validation loss, captions three fixed validation images and logs them with the
+# image and reference caption to wandb.
+evaluation:
+  tasks: [pixmo_cap_qualitative]
