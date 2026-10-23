@@ -96,6 +96,13 @@ class HtmlTable:
         return build_html_table(self.rows)
 
 
+@dataclasses.dataclass
+class ImageTable:
+    """Returned as special metric for logging predictions with their image as a wandb.Table"""
+    rows: List[Dict[str, Any]]
+    COLUMNS = ("image", "prompt", "prediction", "gt")
+
+
 def annotation_to_box(points, point_dist=4):
     to_show = []
     for point in points:
@@ -118,8 +125,7 @@ def gather_examples_as_html(
     n = len(predictions["predictions"])
     if n_examples is not None:
         # Divide by world size since we will aggregate visualization across all processes
-        n = min(n, n_examples)
-        n = (n + get_world_size() - 1) // get_world_size()
+        n = min(n, (n_examples + get_world_size() - 1) // get_world_size())
     rows = []
     new_tokens = predictions["predictions"]
     prompt_tokens = predictions["prompts"]
@@ -337,6 +343,7 @@ class SavePredictions(Evaluator):
         json_file = None
         html_file = None
         metrics = {}
+        local_rows = json_data  # Rank 0 replaces json_data with the rows of every process
 
         if self.json:
             log.info("Save prediction JSON")
@@ -358,6 +365,14 @@ class SavePredictions(Evaluator):
 
         if self.table:
             metrics["prediction_table"] = gather_examples_as_html(self.table, tokenizer, metadatas, predictions)
+            if any(isinstance(m.get("image"), np.ndarray) for m in metadatas):
+                # Tasks that carry a thumbnail are also logged as a wandb.Table, which shows
+                # the images and wraps the text in the wandb UI.
+                n = min(len(local_rows), (self.table + get_world_size() - 1) // get_world_size())
+                metrics["prediction_images"] = ImageTable([
+                    dict(image=metadatas[ix].get("image"), prompt=local_rows[ix]["prompt"],
+                         prediction=local_rows[ix]["prediction"], gt=metadatas[ix].get("answer"))
+                    for ix in range(n)])
         return metrics
 
 
