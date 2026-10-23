@@ -189,9 +189,9 @@ class Experiments(unittest.TestCase):
     def test_mask_empty_trajectories_recipes(self):
         base, trajmask = (load_experiment(ROOT / f'configs/experiments/{name}.yaml',
                                           [f'run.output_dir={self.root}/results'])
-                          for name in ('stage1_pixmo_cap_full_qwen25_7b_lora',
+                          for name in ('stage1_pixmo_cap_full_qwen25_7b_lora_v2',
                                        'stage1_pixmo_cap_full_qwen25_7b_lora_trajmask'))
-        # The two Stage1 recipes differ only in the flag (and the run they write to).
+        # The two Stage1 reruns differ only in the flag (and the run they write to).
         a, b = (OmegaConf.to_container(OmegaConf.structured(e.recipe)) for e in (base, trajmask))
         for recipe in (a, b):
             recipe['run'].pop('name')
