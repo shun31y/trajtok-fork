@@ -98,9 +98,12 @@ class HtmlTable:
 
 @dataclasses.dataclass
 class ImageTable:
-    """Returned as special metric for logging predictions with their image as a wandb.Table"""
+    """Returned as special metric for logging predictions with their image as captioned wandb.Images"""
     rows: List[Dict[str, Any]]
-    COLUMNS = ("image", "prompt", "prediction", "gt")
+
+    @staticmethod
+    def caption(row):
+        return f"PREDICTION:\n{row['prediction']}\n\nREFERENCE:\n{row['gt']}\n\nPROMPT:\n{row['prompt']}"
 
 
 def annotation_to_box(points, point_dist=4):
@@ -366,8 +369,8 @@ class SavePredictions(Evaluator):
         if self.table:
             metrics["prediction_table"] = gather_examples_as_html(self.table, tokenizer, metadatas, predictions)
             if any(isinstance(m.get("image"), np.ndarray) for m in metadatas):
-                # Tasks that carry a thumbnail are also logged as a wandb.Table, which shows
-                # the images and wraps the text in the wandb UI.
+                # Tasks that carry a thumbnail are also logged as captioned wandb.Images, which
+                # the wandb UI shows in full instead of the corner of an Html panel.
                 n = min(len(local_rows), (self.table + get_world_size() - 1) // get_world_size())
                 metrics["prediction_images"] = ImageTable([
                     dict(image=metadatas[ix].get("image"), prompt=local_rows[ix]["prompt"],
