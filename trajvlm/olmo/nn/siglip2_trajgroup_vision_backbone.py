@@ -101,6 +101,11 @@ class SigLip2TrajGroupVisionBackboneConfig(MolmoVisionBackboneConfig):
     attend_other_latents: bool = False
     num_latent_per_traj: int = 1
 
+    # Hide trajectories the segmenter assigns no patch from the LLM, as SegmentTokenizer's
+    # `attn_mask` does. The sequence keeps num_traj tokens per image/clip, but only the assigned
+    # ones are attended to, so the effective token count varies with the image.
+    mask_empty_trajectories: bool = False
+
     # Optional: ckpt to warm-start the SimpleSegmenter from.
     pretrained_segmenter_path: Optional[str] = None
 
@@ -473,9 +478,10 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
                 pre-normalised at SigLIP2's image_res (378 by default).
                 For images: (n_image=1, n_patches=1).
                 For videos: (n_image=n_clips, n_patches=frames_per_clip).
-        Returns: (total_image_tokens_across_batch, d_model) flat tensor, and a
-                 (total_image_tokens_across_batch,) bool mask of tokens whose trajectory
-                 was assigned patches; the others are zeroed and should not be attended to.
+        Returns: (total_image_tokens_across_batch, d_model) flat tensor. With
+                 `mask_empty_trajectories`, also a (total_image_tokens_across_batch,) bool mask
+                 of tokens whose trajectory was assigned patches; the others are zeroed and
+                 should not be attended to.
         """
         cfg = self.config
         vit_res = cfg.vit.image_default_input_size[0]
@@ -516,7 +522,10 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         keep_idx = [b for b, n in enumerate(n_real_per_b) if n > 0]
         if len(keep_idx) == 0:
             d_model = self.image_projector.w2.out_features
-            return images.new_zeros((0, d_model)), torch.zeros(0, dtype=torch.bool, device=images.device)
+            out = images.new_zeros((0, d_model))
+            if not cfg.mask_empty_trajectories:
+                return out
+            return out, torch.zeros(0, dtype=torch.bool, device=images.device)
 
         Fpp = cfg.frames_per_pool
         n_patches = images.shape[2]
@@ -574,4 +583,6 @@ class SigLip2TrajGroupVisionBackbone(nn.Module):
         tokens = torch.cat(per_entry_tokens, dim=0)                         # (total_tokens, 1152)
         valid = torch.cat(per_entry_valid, dim=0)                           # (total_tokens,)
         out = self.image_projector(tokens)                                  # (total_tokens, d_llm)
+        if not cfg.mask_empty_trajectories:
+            return out
         return out * valid.unsqueeze(-1).to(out.dtype), valid

@@ -18,7 +18,8 @@ VALID[[0, 5, 9]] = True
 
 
 def tiny_model():
-    cfg = build_model_cfg("qwen2.5_7b_instruct", pretrained_segmenter_path=None)
+    cfg = build_model_cfg("qwen2.5_7b_instruct", pretrained_segmenter_path=None,
+                          mask_empty_trajectories=True)
     cfg.llm = replace(cfg.llm, init_path=None, d_model=64, n_heads=2, n_kv_heads=1, head_dim=32,
                       mlp_hidden_size=128, n_layers=2, max_sequence_length=512)
     cfg.vision_backbone.vit = replace(cfg.vision_backbone.vit, init_path=None)
@@ -109,6 +110,17 @@ class EmptyTrajectories(unittest.TestCase):
         self.assertTrue(valid.any())
         self.assertTrue((features[~valid] == 0).all())
         self.assertTrue((features[valid].abs().sum(-1) > 0).all())
+
+    def test_backbone_keeps_every_trajectory_by_default(self):
+        backbone = self.model.vision_backbone
+        backbone.config.mask_empty_trajectories = False
+        try:
+            with torch.no_grad():
+                features = backbone(torch.rand(1, 1, 1, 378 * 378 * 3), cum_image_bounds=[torch.tensor([1])])
+        finally:
+            backbone.config.mask_empty_trajectories = True
+        self.assertIsInstance(features, torch.Tensor)
+        self.assertEqual(features.shape, (NUM_TRAJ, self.model.config.llm.d_model))
 
 
 if __name__ == "__main__":

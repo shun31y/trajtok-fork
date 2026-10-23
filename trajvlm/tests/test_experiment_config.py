@@ -32,6 +32,10 @@ def serial(cfg):
     # The new optional architecture field is absent from pre-PEFT snapshots.
     if value.get('model', {}).get('llm', {}).get('lora') is None:
         value.get('model', {}).get('llm', {}).pop('lora', None)
+    # Likewise the opt-in masking of trajectories assigned no patch.
+    vision = value.get('model', {}).get('vision_backbone') or {}
+    if vision.get('mask_empty_trajectories') is False:
+        vision.pop('mask_empty_trajectories')
     return value
 
 
@@ -146,6 +150,27 @@ class Experiments(unittest.TestCase):
     def test_unknown_dataset(self):
         with self.assertRaisesRegex(ValueError, 'Unknown video_academic'):
             build_experiment(self.experiment(2, ['data.datasets=[does_not_exist]']))
+
+    def test_mask_empty_trajectories_recipes(self):
+        base, trajmask = (load_experiment(ROOT / f'configs/experiments/{name}.yaml',
+                                          [f'run.output_dir={self.root}/results'])
+                          for name in ('stage1_pixmo_cap_full_qwen25_7b_lora',
+                                       'stage1_pixmo_cap_full_qwen25_7b_lora_trajmask'))
+        # The two Stage1 recipes differ only in the flag (and the run they write to).
+        a, b = (OmegaConf.to_container(OmegaConf.structured(e.recipe)) for e in (base, trajmask))
+        for recipe in (a, b):
+            recipe['run'].pop('name')
+        self.assertEqual(b['model'].pop('mask_empty_trajectories'), True)
+        self.assertIsNone(a['model'].pop('mask_empty_trajectories'))
+        self.assertEqual(a, b)
+        self.assertFalse(build_experiment(base).model.vision_backbone.mask_empty_trajectories)
+        self.assertTrue(build_experiment(trajmask).model.vision_backbone.mask_empty_trajectories)
+
+    def test_sft_inherits_mask_empty_trajectories(self):
+        cfg = build_experiment(self.experiment(2))
+        self.assertFalse(cfg.model.vision_backbone.mask_empty_trajectories)
+        with self.assertRaisesRegex(ValueError, 'mask_empty_trajectories disagrees'):
+            build_experiment(self.experiment(2, ['model.mask_empty_trajectories=true']))
 
     def test_precedence_and_epochs_recompute(self):
         exp = self.experiment(overrides=['training.max_steps=null', 'training.epochs=4',
